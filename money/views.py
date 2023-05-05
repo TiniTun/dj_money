@@ -5,7 +5,7 @@ import datetime
 import time
 import csv
 from .models import Transaction, User, IncomeCategory, ExpenseCategory, Currency, Account
-from .utils.halyk_parser import convert_pdf_to_csv, normalize_csv
+from .utils.halyk_parser import normalize_csv
 
 
 class TransactionView(generic.ListView):
