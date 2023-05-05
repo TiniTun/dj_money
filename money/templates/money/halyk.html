@@ -1,0 +1,28 @@
+<table>
+    <tr>
+        <th>Date</th>
+        <th>Amount</th>
+        <th>currency</th>
+        <th>original_amount</th>
+        <th>exchange_rate</th>
+        <th>ExpenseCategory</th>
+        <th>IncomeCategory</th>
+        <th>transaction_type</th>
+        <th>account</th>
+        <th>comment</th>
+    </tr>
+{% for row in transaction %}
+    <tr>
+        <td>{{ row.date }}</td>
+        <td>{{ row.amount }}</td>
+        <td>{{ row.currency }}</td>
+        <td>{{ row.original_amount }}</td>
+        <td>{{ row.exchange_rate }}</td>
+        <td>{{ row.category }}</td>
+        <td>{{ row.income_category }}</td>
+        <td>{{ row.transaction_type }}</td>
+        <td>{{ row.account }}</td>
+        <td>{{ row.comment }}</td>
+    </tr>
+{% endfor %}
+</table>

@@ -1,0 +1,34 @@
+{% if latest_transaction_list %}
+<table border="1">
+    <tr>
+        <th>Date</th>
+        <th>Amount</th>
+        <th>currency</th>
+        <th>original amount</th>
+        <th>original currency</th>
+        <th>exchange rate</th>
+        <th>Expense Category</th>
+        <th>Income Category</th>
+        <th>transaction type</th>
+        <th>account</th>
+        <th>comment</th>
+    </tr>
+    {% for row in latest_transaction_list %}
+        <tr>
+            <td>{{ row.date }}</td>
+            <td>{{ row.amount }}</td>
+            <td>{{ row.currency.code }}</td>
+            <td>{{ row.original_amount }}</td>
+            <td>{{ row.account.currency.code }}</td>
+            <td>{{ row.exchange_rate }}</td>
+            <td>{{ row.category }}</td>
+            <td>{{ row.income_category }}</td>
+            <td>{{ row.transaction_type }}</td>
+            <td>{{ row.account }}</td>
+            <td>{{ row.comment }}</td>
+        </tr>
+    {% endfor %}
+    </table>
+{% else %}
+    <p>No transaction are available.</p>
+{% endif %}
