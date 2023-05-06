@@ -9,6 +9,7 @@ services:
       - .:/app
     environment:
       - DEBUG=1
+      - SECRET_KEY='django-insecure-1!05pj*pg&7xymg(f%m&fu5hzs!6-@#a5(etg^5@owgr0k9o6)'
       - DATABASE_URL=postgresql://dj_money:dj_money@db:5432/dj_money
     depends_on:
       - db
