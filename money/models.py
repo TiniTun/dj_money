@@ -92,7 +92,7 @@ class Transaction(models.Model):
     def save(self, *args, **kwargs):
         if self.transaction_type == 'transfer':
             if not self.to_account:
-                raise ValidationError('The beneficiary\'s account is required for the "Transfer" type')
+                raise ValidationError(f'The beneficiary\'s account is required for the "Transfer" type. {self.amount}')
             
             #if self.amount <= 0:
             #    raise ValidationError('Transfer amount must be positive')

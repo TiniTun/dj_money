@@ -122,6 +122,9 @@ def halyk_converter(request):
                     original_currency = currency_tmp
 
                     to_account = Account.objects.filter(currency__code = row[4], name__startswith = 'Halyk').first()
+                    if not to_account:
+                        to_account = Account.objects.filter(name = 'Temporary', default = True).first()
+
                 elif comment == 'Client conversion in Homebank' and credit == 0:
                     if row[4] == row[9]:
                         continue
