@@ -10,9 +10,6 @@ from .models import Transaction
 from .models import BankExportFiles
 
 
-
-admin.site.register(IncomeCategory)
-admin.site.register(ExpenseCategory)
 admin.site.register(Currency)
 admin.site.register(BankCard)
 admin.site.register(AccountType)
@@ -21,10 +18,17 @@ admin.site.register(BankExportFiles)
 
 
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('date', 'date_processing', 'transaction_type', 'amount', 'currency', 'original_amount', 'original_currency', 'account', 'to_account', 'comment')
-    list_filter = ('date', 'transaction_type')
+    list_display = ('date', 'date_processing', 'transaction_type', 'category', 'income_category', 'amount', 'currency', 'original_amount', 'original_currency', 'account', 'to_account', 'comment')
+    list_filter = ('date', 'transaction_type', 'category', 'income_category', 'account')
+
+class IncomeCategoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'parent_category', 'user',)
+    list_filter = ('name', 'parent_category')
+
+class ExpenseCategoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'parent_category', 'user',)
+    list_filter = ('name', 'parent_category')
 
 admin.site.register(Transaction, TransactionAdmin)
-
-def display_currency():
-    pass
+admin.site.register(IncomeCategory, IncomeCategoryAdmin)
+admin.site.register(ExpenseCategory, ExpenseCategoryAdmin)
