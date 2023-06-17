@@ -3,3 +3,4 @@ Django==4.1.7
 sqlparse==0.4.3
 psycopg2-binary==2.9.3
 django-environ==0.4.5
+django-admin-sortable2==2.1.8

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 
-from .widgets import CustomSelectWidget
+from .widgets import HierarchicalSelect
 
 from .models import IncomeCategory
 from .models import ExpenseCategory
@@ -21,20 +21,34 @@ admin.site.register(BankExportFiles)
 
 class ExpenseCategoryInLine(admin.TabularInline):
     model = ExpenseCategory
+        
+def get_hierarchical_choices():
+    def add_category(category, choices, level=0):
+        choices.append((category.pk, "---" * level + category.name))
+        for child_category in ExpenseCategory.objects.filter(parent_category=category):
+            add_category(child_category, choices, level + 1)
+            
+    choices = []
+    for root_category in ExpenseCategory.objects.filter(parent_category__isnull=True):
+        add_category(root_category, choices)
+    return choices
 
 class TransactionAdminForm(forms.ModelForm):
+    category = forms.ChoiceField(choices=get_hierarchical_choices, widget=HierarchicalSelect())
     class Meta:
         model = Transaction
         fields = '__all__'
-        widgets = {
-            'category': CustomSelectWidget,
-        }
 
 class TransactionAdmin(admin.ModelAdmin):
     list_display = ('date', 'date_processing', 'transaction_type', 'category', 'income_category', 'amount', 'currency', 'original_amount', 'original_currency', 'account', 'to_account', 'comment')
     list_filter = ('date', 'transaction_type', 'category', 'income_category', 'account')
-    #form = TransactionAdminForm
-    raw_id_fields = ['category', ]
+    form = TransactionAdminForm
+    #raw_id_fields = ['category', ]
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'category':
+            kwargs['queryset'] = ExpenseCategory.objects.all()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 class IncomeCategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'parent_category', 'user',)
@@ -43,7 +57,6 @@ class IncomeCategoryAdmin(admin.ModelAdmin):
 class ExpenseCategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'parent_category', 'user',)
     list_filter = ('name', 'parent_category')
-    
 
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(IncomeCategory, IncomeCategoryAdmin)
