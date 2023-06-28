@@ -9,7 +9,7 @@ import time
 import csv
 from .models import Transaction, User, IncomeCategory, ExpenseCategory, Currency, Account, BankExportFiles
 from .forms import BankExportFilesForm
-from .utils.halyk_parser import normalize_csv
+from .utils.halyk_parser import normalize_halyk_csv
 
 
 class TransactionView(LoginRequiredMixin, generic.ListView):
@@ -25,16 +25,21 @@ def index(request):
 
 @login_required
 def upload_file(request):
-    code = time.mktime(datetime.datetime.now().timetuple())
     if request.method == 'POST':
         form = BankExportFilesForm(request.POST, request.FILES)
         if form.is_valid():
             # Если необходимо, выполните дополнительную валидацию файла
-            # ...
-            
+            form_sourse = form.cleaned_data['sourse']
+            if form_sourse == 'ziirat':
+                redirect = 'ziirat'
+            elif form_sourse == 'halyk':
+                redirect = 'halyk'
+            else:
+                redirect = 'upload'
             # Здесь можно сохранить файл
             form.save()
-            return HttpResponseRedirect('/money/halyk/')
+            request.session['form_data'] = form.cleaned_data['document'].name
+            return HttpResponseRedirect(f'/money/{redirect}/')
         else:
             return render(request, 'money/upload.html', {'form': form})
 
@@ -49,13 +54,16 @@ def handle_uploaded_file(f, name_file):
 
 @login_required
 def halyk_converter(request):
+    
     code = time.mktime(datetime.datetime.now().timetuple())
 
-    input_file = settings.MEDIA_ROOT + BankExportFiles.objects.latest('uploaded_at').document.name
+    #wtf?
+    input_file = f"{settings.MEDIA_ROOT}{request.session.get('form_data')}"
+    #input_file = settings.MEDIA_ROOT + BankExportFiles.objects.latest('uploaded_at').document.name
     output_file = f'{settings.MEDIA_ROOT}files/output_{code}.csv'
 
     #convert_pdf_to_csv(input_file, not_normalize_file)
-    normalize_csv(input_file, output_file)
+    normalize_halyk_csv(input_file, output_file)
 
     res = []
 
@@ -192,3 +200,24 @@ def halyk_converter(request):
 
     return HttpResponse("All Ok!")
 
+@login_required
+def ziirat_converter(request):
+
+    code = time.mktime(datetime.datetime.now().timetuple())
+
+    form_data = request.session.get('form_data')
+
+    if form_data:
+        input_file = settings.MEDIA_ROOT + form_data
+        output_file = f'{settings.MEDIA_ROOT}files/output_{code}.csv'
+
+    else:
+        return HttpResponse("NO DATA!")
+    
+    with open(output_file, 'r', newline='', encoding='utf-8') as f_in:
+        reader = csv.reader(f_in)
+        
+        for row in reader:
+            continue
+
+    return HttpResponse("Ziirat")

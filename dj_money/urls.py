@@ -22,8 +22,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('money/', include('money.urls')),
-    path('polls/', include('polls.urls')),
     path('admin/', admin.site.urls),
     path('', RedirectView.as_view(url='/money/', permanent=True)),
     path('accounts/', include('django.contrib.auth.urls')),
+    path('blog/', include('blog.urls')),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

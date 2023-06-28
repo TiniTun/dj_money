@@ -4,8 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-
-
+from .validators import validate_file_extension
 
 
 class ExpenseCategory(models.Model):
@@ -90,6 +89,10 @@ class Transaction(models.Model):
         return f"{self.user} - {self.transaction_type} - {self.amount}"
     
     def save(self, *args, **kwargs):
+        if self.original_amount:
+            self.exchange_rate = abs(float(self.amount) / float(self.original_amount))
+        elif self.exchange_rate:
+            self.original_amount = abs(float(self.amount)) * float(self.exchange_rate)
         if self.transaction_type == 'transfer':
             if not self.to_account:
                 raise ValidationError(f'The beneficiary\'s account is required for the "Transfer" type. {self.amount}')
@@ -102,11 +105,14 @@ class Transaction(models.Model):
         
         super(Transaction, self).save(*args, **kwargs)
 
-
-
 class BankExportFiles(models.Model):
+    BANK_TYPE = (
+        ('halyk', 'Halyk'),
+        ('ziirat', 'Ziirat')
+    )
     description = models.CharField(max_length=255, blank=True)
-    document = models.FileField(upload_to='files/')
+    document = models.FileField(upload_to='files/', validators=[validate_file_extension])
+    sourse = models.CharField(max_length=10, choices=BANK_TYPE, default='halyk')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 

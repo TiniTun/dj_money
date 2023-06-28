@@ -2,7 +2,7 @@ import csv
 import re
 
 
-def normalize_csv(input_file, output_file):
+def normalize_halyk_csv(input_file, output_file):
     #input_file = 'halyk.csv'
     #output_file = 'output.csv'
 

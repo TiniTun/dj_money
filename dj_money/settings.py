@@ -33,13 +33,15 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = ['localhost', '51.250.48.40']
+#ALLOWED_HOSTS = ['localhost', '51.250.48.40']
+ALLOWED_HOSTS = []
 
 # Application definition
 
 INSTALLED_APPS = [
     'polls.apps.PollsConfig',
     'money.apps.MoneyConfig',
+    'blog.apps.BlogConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

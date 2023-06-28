@@ -34,7 +34,12 @@ def get_hierarchical_choices():
     return choices
 
 class TransactionAdminForm(forms.ModelForm):
-    category = forms.ChoiceField(choices=get_hierarchical_choices, widget=HierarchicalSelect())
+    category = forms.ChoiceField(choices=get_hierarchical_choices(), widget=HierarchicalSelect())
+
+    def clean_category(self):
+        category_id = self.cleaned_data.get('category')
+        return ExpenseCategory.objects.get(pk=category_id)
+
     class Meta:
         model = Transaction
         fields = '__all__'
@@ -44,11 +49,6 @@ class TransactionAdmin(admin.ModelAdmin):
     list_filter = ('date', 'transaction_type', 'category', 'income_category', 'account')
     form = TransactionAdminForm
     #raw_id_fields = ['category', ]
-
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == 'category':
-            kwargs['queryset'] = ExpenseCategory.objects.all()
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 class IncomeCategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'parent_category', 'user',)
