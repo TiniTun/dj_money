@@ -212,13 +212,11 @@ def ziirat_converter(request):
     form_data = request.session.get('form_data')
 
     if form_data:
-        input_file = settings.MEDIA_ROOT + form_data
-        output_file = f'{settings.MEDIA_ROOT}files/output_{code}.csv'
-
+        input_file = f"{settings.MEDIA_ROOT}files/{form_data}"
     else:
         return HttpResponse("NO DATA!")
     
-    with open(output_file, 'r', newline='', encoding='utf-8') as f_in:
+    with open(input_file, 'r', newline='', encoding='utf-8') as f_in:
         reader = csv.reader(f_in)
         
         for row in reader:
@@ -234,9 +232,7 @@ def deniz_converter(request):
     form_data = request.session.get('form_data')
 
     if form_data:
-        input_file = settings.MEDIA_ROOT + form_data
-        output_file = f'{settings.MEDIA_ROOT}files/output_{code}.csv'
-
+        input_file = f"{settings.MEDIA_ROOT}files/{form_data}"
     else:
         return HttpResponse("NO DATA!")
     
