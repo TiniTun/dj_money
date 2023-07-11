@@ -32,6 +32,15 @@ class Currency(models.Model):
     def __str__(self):
         return f"{self.name} ({self.code})"
 
+class ExchangeRate(models.Model):
+    source_currency = models.ForeignKey(Currency, related_name='source_currency', on_delete=models.CASCADE)
+    target_currency = models.ForeignKey(Currency, related_name='target_currency', on_delete=models.CASCADE)
+    exchange_rate = models.DecimalField(max_digits=10, decimal_places=6)
+    date = models.DateField()
+
+    def __str__(self):
+        return f"{self.date}: 1 {self.source_currency.code} = {self.exchange_rate} {self.target_currency.code}"
+
 class BankCard(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     card_number = models.CharField(max_length=19)  # XXXX-XXXX-XXXX-XXXX
@@ -92,7 +101,10 @@ class Transaction(models.Model):
         if self.original_amount:
             self.exchange_rate = abs(float(self.amount) / float(self.original_amount))
         elif self.exchange_rate:
-            self.original_amount = abs(float(self.amount)) * float(self.exchange_rate)
+            if self.original_currency.code == 'USD' and self.currency.code != 'USD':
+                self.original_amount = abs(float(self.amount)) / float(self.exchange_rate)
+            elif self.original_currency.code != 'USD' and self.currency.code == 'USD':
+                self.original_amount = abs(float(self.amount)) * float(self.exchange_rate)
         if self.transaction_type == 'transfer':
             if not self.to_account:
                 raise ValidationError(f'The beneficiary\'s account is required for the "Transfer" type. {self.amount}')
@@ -108,7 +120,8 @@ class Transaction(models.Model):
 class BankExportFiles(models.Model):
     BANK_TYPE = (
         ('halyk', 'Halyk'),
-        ('ziirat', 'Ziirat')
+        ('ziirat', 'Ziirat'),
+        ('deniz', 'Deniz')
     )
     description = models.CharField(max_length=255, blank=True)
     document = models.FileField(upload_to='files/', validators=[validate_file_extension])

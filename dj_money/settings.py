@@ -136,3 +136,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Redirect to home URL after login (Default redirects to /accounts/profile/)
 LOGIN_REDIRECT_URL = '/'
+
+FIXER_API_URL = env('FIXER_API_URL')
+FIXER_API_KEY = env('FIXER_API_KEY')

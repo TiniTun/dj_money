@@ -11,6 +11,7 @@ from .models import AccountType
 from .models import Account
 from .models import Transaction
 from .models import BankExportFiles
+from .models import ExchangeRate
 
 
 admin.site.register(Currency)
@@ -18,6 +19,7 @@ admin.site.register(BankCard)
 admin.site.register(AccountType)
 admin.site.register(Account)
 admin.site.register(BankExportFiles)
+admin.site.register(ExchangeRate)
 
 class ExpenseCategoryInLine(admin.TabularInline):
     model = ExpenseCategory
@@ -34,11 +36,14 @@ def get_hierarchical_choices():
     return choices
 
 class TransactionAdminForm(forms.ModelForm):
-    category = forms.ChoiceField(choices=get_hierarchical_choices(), widget=HierarchicalSelect())
+    category = forms.ChoiceField(choices=[("", "---------")] + get_hierarchical_choices(), widget=HierarchicalSelect(), required=False)
 
     def clean_category(self):
         category_id = self.cleaned_data.get('category')
-        return ExpenseCategory.objects.get(pk=category_id)
+        if not category_id:
+            return None
+        else:
+            return ExpenseCategory.objects.get(pk=category_id)
 
     class Meta:
         model = Transaction

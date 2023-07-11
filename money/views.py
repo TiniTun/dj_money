@@ -7,9 +7,11 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 import datetime
 import time
 import csv
-from .models import Transaction, User, IncomeCategory, ExpenseCategory, Currency, Account, BankExportFiles
-from .forms import BankExportFilesForm
+import requests
+from .models import Transaction, User, IncomeCategory, ExpenseCategory, Currency, Account, BankExportFiles, ExchangeRate
+from .forms import BankExportFilesForm, DateCurrencyExchangeForm
 from .utils.halyk_parser import normalize_halyk_csv
+from .utils.fixed_api import fetch_exchange_rates_for_date, date_range
 
 
 class TransactionView(LoginRequiredMixin, generic.ListView):
@@ -34,6 +36,8 @@ def upload_file(request):
                 redirect = 'ziirat'
             elif form_sourse == 'halyk':
                 redirect = 'halyk'
+            elif form_sourse == 'deniz':
+                redirect = 'deniz'
             else:
                 redirect = 'upload'
             # Здесь можно сохранить файл
@@ -221,3 +225,117 @@ def ziirat_converter(request):
             continue
 
     return HttpResponse("Ziirat")
+
+@login_required
+def deniz_converter(request):
+
+    code = time.mktime(datetime.datetime.now().timetuple())
+
+    form_data = request.session.get('form_data')
+
+    if form_data:
+        input_file = settings.MEDIA_ROOT + form_data
+        output_file = f'{settings.MEDIA_ROOT}files/output_{code}.csv'
+
+    else:
+        return HttpResponse("NO DATA!")
+    
+    with open(input_file, 'r', newline='', encoding='utf-8') as f_in:
+        reader = csv.reader(f_in, delimiter=';')
+        
+        for row in reader:
+            income_category = None
+            expense_category = None
+            to_account = None
+            original_amount = 0
+            exchange_rate = 0
+
+            user = User.objects.get(username="Egor")
+            currency = Currency.objects.filter(code = 'TRY').first()
+            original_currency = Currency.objects.filter(code = 'USD').first()
+            data_original = datetime.datetime.strptime(row[0], '%d.%m.%Y %H:%M').date()
+            date_processing = datetime.datetime.strptime(row[0], '%d.%m.%Y  %H:%M').date()
+            transaction_type = row[8]
+            comment = f'{row[2]} | {row[1]} | {row[3]} | {row[4]}'
+
+            amount = float(row[5].replace(" ", "").replace(",", "."))
+
+            account = Account.objects.filter(currency__code = 'TRY', name__startswith = 'Deniz').first()
+            
+            if transaction_type == 'expense':
+                expense_category = ExpenseCategory.objects.filter(id = int(row[7].split('|')[0])).first()
+                exchange_rate = ExchangeRate.objects.get(target_currency__code = 'TRY', date = data_original).exchange_rate
+            elif transaction_type == 'transfer':
+                transfer_amount = float(row[9].replace(" ", "").replace(",", "."))
+                if transfer_amount < 0:
+                    original_amount = amount
+                    amount = transfer_amount
+
+                    original_currency = currency
+                    currency = Currency.objects.filter(code = row[10]).first()
+
+                    to_account = account
+                    account = Account.objects.filter(name = row[11]).first()
+                elif transfer_amount >= 0:
+                    original_amount = transfer_amount
+                    original_currency = Currency.objects.filter(code = row[10]).first()
+                    to_account = Account.objects.filter(name = row[11]).first()
+            elif transaction_type == 'income':
+                income_category = IncomeCategory.objects.filter(name='Indeterminately').first()
+                original_amount = amount
+                original_currency = currency
+
+            transaction_exists = Transaction.objects.filter(user = user, 
+                                                            transaction_type = transaction_type, 
+                                                            amount = amount, 
+                                                            currency = currency, 
+                                                            original_amount = original_amount,
+                                                            original_currency = original_currency,
+                                                            date = data_original,
+                                                            date_processing = date_processing,
+                                                            comment = comment,
+                                                            account = account,
+                                                            to_account = to_account
+                                                            ).exists()
+            if transaction_exists:
+                continue
+
+            new_transaction = Transaction()
+            new_transaction.user = user
+            new_transaction.category = expense_category
+            new_transaction.income_category = income_category
+            new_transaction.transaction_type = transaction_type
+            new_transaction.amount = amount
+            new_transaction.currency = currency
+            new_transaction.original_amount = original_amount
+            new_transaction.original_currency = original_currency
+            new_transaction.exchange_rate = exchange_rate
+            new_transaction.date = data_original
+            new_transaction.date_processing = date_processing
+            new_transaction.comment = comment
+            new_transaction.account = account
+            new_transaction.to_account = to_account
+            new_transaction.save()
+            
+
+    return HttpResponse("Deniz")
+
+@login_required
+def get_currency_exchange_rate(request):
+    #fetch_historical_exchange_rates(datetime.datetime.strptime('2022-01-01','%Y-%m-%d'),datetime.datetime.strptime('2023-07-04','%Y-%m-%d'))
+    
+    if request.method == 'POST':
+        form = DateCurrencyExchangeForm(request.POST)
+        if form.is_valid():
+            start_date = form.cleaned_data['start_date']
+            end_date = form.cleaned_data['end_date']
+
+            for single_date in date_range(start_date, end_date):
+                fetch_exchange_rates_for_date(single_date)
+        else:
+            return render(request, 'money/currency.html', {'form': form})
+    else:
+        form =DateCurrencyExchangeForm()
+        return render(request, 'money/currency.html', {'form': form})
+
+    return HttpResponse("All OK!")
