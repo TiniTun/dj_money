@@ -42,7 +42,7 @@ def upload_file(request):
                 redirect = 'upload'
             # Здесь можно сохранить файл
             form.save()
-            request.session['form_data'] = form.cleaned_data['document'].name
+            request.session['form_data'] = form.instance.document.name
             return HttpResponseRedirect(f'/money/{redirect}/')
         else:
             return render(request, 'money/upload.html', {'form': form})
@@ -212,7 +212,7 @@ def ziirat_converter(request):
     form_data = request.session.get('form_data')
 
     if form_data:
-        input_file = f"{settings.MEDIA_ROOT}files/{form_data}"
+        input_file = f"{settings.MEDIA_ROOT}{form_data}"
     else:
         return HttpResponse("NO DATA!")
     
@@ -232,7 +232,7 @@ def deniz_converter(request):
     form_data = request.session.get('form_data')
 
     if form_data:
-        input_file = f"{settings.MEDIA_ROOT}files/{form_data}"
+        input_file = f"{settings.MEDIA_ROOT}{form_data}"
     else:
         return HttpResponse("NO DATA!")
     
@@ -261,6 +261,7 @@ def deniz_converter(request):
             if transaction_type == 'expense':
                 expense_category = ExpenseCategory.objects.filter(id = int(row[7].split('|')[0])).first()
                 exchange_rate = ExchangeRate.objects.get(target_currency__code = 'TRY', date = data_original).exchange_rate
+                #original_amount = abs(float(amount)) / abs(float(exchange_rate))
             elif transaction_type == 'transfer':
                 transfer_amount = float(row[9].replace(" ", "").replace(",", "."))
                 if transfer_amount < 0:
@@ -285,8 +286,8 @@ def deniz_converter(request):
                                                             transaction_type = transaction_type, 
                                                             amount = amount, 
                                                             currency = currency, 
-                                                            original_amount = original_amount,
-                                                            original_currency = original_currency,
+                                                            #original_amount = original_amount,
+                                                            #original_currency = original_currency,
                                                             date = data_original,
                                                             date_processing = date_processing,
                                                             comment = comment,
@@ -295,7 +296,7 @@ def deniz_converter(request):
                                                             ).exists()
             if transaction_exists:
                 continue
-
+            
             new_transaction = Transaction()
             new_transaction.user = user
             new_transaction.category = expense_category
