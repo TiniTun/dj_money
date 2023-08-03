@@ -217,12 +217,84 @@ def ziirat_converter(request):
         return HttpResponse("NO DATA!")
     
     with open(input_file, 'r', newline='', encoding='utf-8') as f_in:
-        reader = csv.reader(f_in)
+        reader = csv.reader(f_in, delimiter=';')
         
         for row in reader:
-            continue
+            income_category = None
+            expense_category = None
+            to_account = None
+            original_amount = 0
+            exchange_rate = 0
 
-    return HttpResponse("Ziirat")
+            user = User.objects.get(username="Egor")
+            currency = Currency.objects.filter(code = 'TRY').first()
+            original_currency = Currency.objects.filter(code = 'USD').first()
+            data_original = datetime.datetime.strptime(row[0], '%d.%m.%Y').date()
+            date_processing = datetime.datetime.strptime(row[0], '%d.%m.%Y').date()
+            transaction_type = row[6]
+            comment = f'{row[2]} | {row[1]}'
+
+            amount = float(row[3].replace(" ", "").replace(",", "."))
+
+            account = Account.objects.filter(currency__code = 'TRY', name__startswith = 'Ziraat Egor').first()
+
+            if transaction_type == 'expense':
+                expense_category = ExpenseCategory.objects.filter(id = int(row[5].split('|')[0])).first()
+                exchange_rate = ExchangeRate.objects.get(target_currency__code = 'TRY', date = data_original).exchange_rate
+                #original_amount = abs(float(amount)) / abs(float(exchange_rate))
+            elif transaction_type == 'transfer':
+                transfer_amount = float(row[7].replace(" ", "").replace(",", "."))
+                if transfer_amount < 0:
+                    original_amount = amount
+                    amount = transfer_amount
+
+                    original_currency = currency
+                    currency = Currency.objects.filter(code = row[8]).first()
+
+                    to_account = account
+                    account = Account.objects.filter(name = row[9]).first()
+                elif transfer_amount >= 0:
+                    original_amount = transfer_amount
+                    original_currency = Currency.objects.filter(code = row[8]).first()
+                    to_account = Account.objects.filter(name = row[9]).first()
+            elif transaction_type == 'income':
+                income_category = IncomeCategory.objects.filter(name='Indeterminately').first()
+                original_amount = amount
+                original_currency = currency
+            
+            transaction_exists = Transaction.objects.filter(user = user, 
+                                                            transaction_type = transaction_type, 
+                                                            amount = amount, 
+                                                            currency = currency, 
+                                                            #original_amount = original_amount,
+                                                            #original_currency = original_currency,
+                                                            date = data_original,
+                                                            date_processing = date_processing,
+                                                            comment = comment,
+                                                            account = account,
+                                                            to_account = to_account
+                                                            ).exists()
+            if transaction_exists:
+                continue
+            
+            new_transaction = Transaction()
+            new_transaction.user = user
+            new_transaction.category = expense_category
+            new_transaction.income_category = income_category
+            new_transaction.transaction_type = transaction_type
+            new_transaction.amount = amount
+            new_transaction.currency = currency
+            new_transaction.original_amount = original_amount
+            new_transaction.original_currency = original_currency
+            new_transaction.exchange_rate = exchange_rate
+            new_transaction.date = data_original
+            new_transaction.date_processing = date_processing
+            new_transaction.comment = comment
+            new_transaction.account = account
+            new_transaction.to_account = to_account
+            new_transaction.save()
+
+    return HttpResponse("Ziraat")
 
 @login_required
 def deniz_converter(request):

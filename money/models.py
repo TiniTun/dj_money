@@ -102,9 +102,9 @@ class Transaction(models.Model):
             self.exchange_rate = abs(float(self.amount) / float(self.original_amount))
         elif self.exchange_rate:
             if self.original_currency.code == 'USD' and self.currency.code != 'USD':
-                self.original_amount = abs(float(self.amount)) / float(self.exchange_rate)
+                self.original_amount = float(self.amount) / float(self.exchange_rate)
             elif self.original_currency.code != 'USD' and self.currency.code == 'USD':
-                self.original_amount = abs(float(self.amount)) * float(self.exchange_rate)
+                self.original_amount = float(self.amount) * float(self.exchange_rate)
         if self.transaction_type == 'transfer':
             if not self.to_account:
                 raise ValidationError(f'The beneficiary\'s account is required for the "Transfer" type. {self.amount}')
