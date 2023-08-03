@@ -62,7 +62,7 @@ def halyk_converter(request):
     code = time.mktime(datetime.datetime.now().timetuple())
 
     #wtf?
-    input_file = f"{settings.MEDIA_ROOT}files/{request.session.get('form_data')}"
+    input_file = f"{settings.MEDIA_ROOT}{request.session.get('form_data')}"
     #input_file = settings.MEDIA_ROOT + BankExportFiles.objects.latest('uploaded_at').document.name
     output_file = f'{settings.MEDIA_ROOT}files/output_{code}.csv'
 
