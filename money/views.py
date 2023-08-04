@@ -236,7 +236,7 @@ def ziirat_converter(request):
 
             amount = float(row[3].replace(" ", "").replace(",", "."))
 
-            account = Account.objects.filter(currency__code = 'TRY', name__startswith = 'Ziraat Egor').first()
+            account = Account.objects.filter(currency__code = 'TRY', name__startswith = 'Ziraat Kseniia').first()
 
             if transaction_type == 'expense':
                 expense_category = ExpenseCategory.objects.filter(id = int(row[5].split('|')[0])).first()
