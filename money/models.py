@@ -121,7 +121,8 @@ class BankExportFiles(models.Model):
     BANK_TYPE = (
         ('halyk', 'Halyk'),
         ('ziirat', 'Ziirat'),
-        ('deniz', 'Deniz')
+        ('deniz', 'Deniz'),
+        ('kaspikz', 'Kaspi.kz')
     )
     description = models.CharField(max_length=255, blank=True)
     document = models.FileField(upload_to='files/', validators=[validate_file_extension])

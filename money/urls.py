@@ -9,6 +9,7 @@ urlpatterns = [
     path('halyk/', views.halyk_converter, name='halyk'),
     path('ziirat/', views.ziirat_converter, name='ziirat'),
     path('deniz/', views.deniz_converter, name='deniz'),
+    path('kaspikz/', views.kaspikz_converter, name='kaspikz'),
     path('upload/', views.upload_file, name='upload_file'),
     path('get_currency/', views.get_currency_exchange_rate, name='get_currency'),
 ]
