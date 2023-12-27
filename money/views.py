@@ -8,7 +8,7 @@ import datetime
 import time
 import csv
 import requests
-from .models import Transaction, User, IncomeCategory, ExpenseCategory, Currency, Account, BankExportFiles, ExchangeRate
+from .models import Transaction, User, IncomeCategory, ExpenseCategory, Currency, Account, BankExportFiles, ExchangeRate, TransactionCashback
 from .forms import BankExportFilesForm, DateCurrencyExchangeForm
 from .utils.halyk_parser import normalize_halyk_csv
 from .utils.fixed_api import fetch_exchange_rates_for_date, date_range
@@ -40,6 +40,8 @@ def upload_file(request):
                 redirect = 'deniz'
             elif form_sourse == 'kaspikz':
                 redirect = 'kaspikz'
+            elif form_sourse == 'bcc':
+                redirect = 'bcckz'
             else:
                 redirect = 'upload'
             # Здесь можно сохранить файл
@@ -499,6 +501,95 @@ def kaspikz_converter(request):
             
 
     return HttpResponse("Kaspi.kz")
+
+@login_required
+def bcckz_converter(request):
+    form_data = request.session.get('form_data')
+
+    if form_data:
+        input_file = f"{settings.MEDIA_ROOT}{form_data}"
+    else:
+        return HttpResponse("NO DATA!")
+    
+    with open(input_file, 'r', newline='', encoding='utf-8') as f_in:
+        reader = csv.reader(f_in, delimiter=';')
+        
+        for row in reader:
+            income_category = None
+            expense_category = None
+            to_account = None
+            original_amount = 0
+            exchange_rate = 0
+
+            user = User.objects.get(username="Egor")
+            data_original = datetime.datetime.strptime(row[0], '%d.%m.%Y').date()
+            date_processing = datetime.datetime.strptime(row[2], '%d.%m.%Y').date()
+            transaction_type = row[10]
+            comment = row[3]
+
+            amount = float(row[4].replace(" ", "").replace(",", "."))
+            
+            account = Account.objects.filter(currency__code = 'KZT', name__startswith = 'BCC KZT').first()
+
+            if transaction_type == 'expense':
+                expense_category = ExpenseCategory.objects.filter(id = int(row[9].split('|')[0])).first()
+                currency = Currency.objects.filter(code = row[5]).first()
+                original_amount = amount
+                original_currency = currency
+
+                
+            elif transaction_type == 'transfer':
+                currency = Currency.objects.filter(code = row[5]).first()
+                original_amount = float(row[12].replace(" ", "").replace(",", "."))
+                original_currency = Currency.objects.filter(code = row[13]).first()
+                to_account = Account.objects.filter(name = row[11]).first()
+            elif transaction_type == 'income':
+                income_category = IncomeCategory.objects.filter(name='Indeterminately').first()
+                currency = Currency.objects.filter(code = row[5]).first()
+                original_amount = amount
+                original_currency = currency
+
+            transaction_exists = Transaction.objects.filter(user = user, 
+                                                            transaction_type = transaction_type, 
+                                                            amount = amount, 
+                                                            currency = currency, 
+                                                            #original_amount = original_amount,
+                                                            #original_currency = original_currency,
+                                                            date = data_original,
+                                                            date_processing = date_processing,
+                                                            comment = comment,
+                                                            account = account,
+                                                            to_account = to_account
+                                                            ).exists()
+            if transaction_exists:
+                continue
+            
+            new_transaction = Transaction()
+            new_transaction.user = user
+            new_transaction.category = expense_category
+            new_transaction.income_category = income_category
+            new_transaction.transaction_type = transaction_type
+            new_transaction.amount = amount
+            new_transaction.currency = currency
+            new_transaction.original_amount = original_amount
+            new_transaction.original_currency = original_currency
+            new_transaction.exchange_rate = exchange_rate
+            new_transaction.date = data_original
+            new_transaction.date_processing = date_processing
+            new_transaction.comment = comment
+            new_transaction.account = account
+            new_transaction.to_account = to_account
+            obj_tran = new_transaction.save()
+            
+            if transaction_type == 'expense':
+                new_cashback = TransactionCashback()
+                new_cashback.transaction = new_transaction
+                new_cashback.real_amount = float(row[6].replace(" ", "").replace(",", "."))
+                new_cashback.cashback = float(row[8].replace(" ", "").replace(",", "."))
+                new_cashback.save()
+
+    return HttpResponse("BCC.kz")
+
 
 @login_required
 def get_currency_exchange_rate(request):

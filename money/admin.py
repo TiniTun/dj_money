@@ -12,6 +12,7 @@ from .models import Account
 from .models import Transaction
 from .models import BankExportFiles
 from .models import ExchangeRate
+from .models import TransactionCashback
 
 
 admin.site.register(Currency)
@@ -20,6 +21,7 @@ admin.site.register(AccountType)
 admin.site.register(Account)
 admin.site.register(BankExportFiles)
 admin.site.register(ExchangeRate)
+admin.site.register(TransactionCashback)
 
 class ExpenseCategoryInLine(admin.TabularInline):
     model = ExpenseCategory
