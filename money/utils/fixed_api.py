@@ -48,11 +48,16 @@ def fetch_historical_exchange_rates(start_date: date, end_date: date, base_curre
         print(f"Failed to fetch historical exchange rates: {error_info}")
 
 
-def fetch_exchange_rates_for_date(target_date: date, base_currency_code='USD'):
+def fetch_exchange_rates_for_date(target_date: date, extra_currency=None, only_extra=False, base_currency_code='USD'):
     access_key = settings.FIXER_API_KEY  # replace with your actual API key
 
     target_currency_codes = ['RUB', 'TRY', 'EUR', 'KZT', 'AUD']
-    symbols = ','.join(target_currency_codes)
+    if only_extra:
+        symbols = extra_currency
+    else:
+        symbols = ','.join(target_currency_codes)
+        if extra_currency:
+            symbols += f',{extra_currency}'
 
     try:
         response = requests.get(f'{settings.FIXER_API_URL}{target_date.isoformat()}', params={
@@ -82,7 +87,7 @@ def fetch_exchange_rates_for_date(target_date: date, base_currency_code='USD'):
     else:
         error_info = data.get('error', {})  # The API might provide error details under 'error'
         print(f"Failed to fetch exchange rates for {target_date}: {error_info}")
-
+    
 def date_range(start_date, end_date):
     for n in range(int((end_date - start_date).days) + 1):
         yield start_date + timedelta(n)

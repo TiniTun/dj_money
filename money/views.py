@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.views import generic
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -600,9 +600,11 @@ def get_currency_exchange_rate(request):
         if form.is_valid():
             start_date = form.cleaned_data['start_date']
             end_date = form.cleaned_data['end_date']
+            extra_currency = form.cleaned_data['extra_currency']
+            only_extra = form.cleaned_data['only_extra']
 
             for single_date in date_range(start_date, end_date):
-                fetch_exchange_rates_for_date(single_date)
+                fetch_exchange_rates_for_date(single_date,extra_currency=extra_currency,only_extra=only_extra)
         else:
             return render(request, 'money/currency.html', {'form': form})
     else:
