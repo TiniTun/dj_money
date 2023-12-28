@@ -10,8 +10,8 @@ class BankExportFilesForm(forms.ModelForm):
 class DateCurrencyExchangeForm(forms.Form):
     start_date = forms.DateField()
     end_date = forms.DateField()
-    extra_currency = forms.Field()
-    only_extra = forms.BooleanField()
+    extra_currency = forms.Field(required=False)
+    only_extra = forms.BooleanField(required=False)
     
     def clean(self):
         cleaned_data = super().clean()
