@@ -539,10 +539,21 @@ def bcckz_converter(request):
 
                 
             elif transaction_type == 'transfer':
-                currency = Currency.objects.filter(code = row[5]).first()
-                original_amount = float(row[12].replace(" ", "").replace(",", "."))
-                original_currency = Currency.objects.filter(code = row[13]).first()
-                to_account = Account.objects.filter(name = row[11]).first()
+                transfer_amount = float(row[12].replace(" ", "").replace(",", "."))
+                if transfer_amount < 0:
+                    to_account = account
+                    account = Account.objects.filter(name = row[11]).first()
+
+                    original_amount = amount
+                    original_currency = currency
+
+                    amount = transfer_amount
+                    currency = Currency.objects.filter(code = row[13]).first()
+                elif transfer_amount >= 0:
+                    currency = Currency.objects.filter(code = row[5]).first()
+                    original_amount = float(row[12].replace(" ", "").replace(",", "."))
+                    original_currency = Currency.objects.filter(code = row[13]).first()
+                    to_account = Account.objects.filter(name = row[11]).first()
             elif transaction_type == 'income':
                 income_category = IncomeCategory.objects.filter(name='Indeterminately').first()
                 currency = Currency.objects.filter(code = row[5]).first()
