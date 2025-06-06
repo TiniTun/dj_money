@@ -38,7 +38,12 @@ def get_hierarchical_choices():
     return choices
 
 class TransactionAdminForm(forms.ModelForm):
-    category = forms.ChoiceField(choices=[("", "---------")] + get_hierarchical_choices(), widget=HierarchicalSelect(), required=False)
+    category = forms.ChoiceField(choices=[("", "---------")], widget=HierarchicalSelect(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['category'].choices = [("", "---------")] + get_hierarchical_choices()
+
 
     def clean_category(self):
         category_id = self.cleaned_data.get('category')

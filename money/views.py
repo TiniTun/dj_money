@@ -4,14 +4,23 @@ from django.views import generic
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.utils.crypto import get_random_string
+import os
 import datetime
 import time
 import csv
 import requests
+import boto3
+import json
+import tempfile
 from .models import Transaction, User, IncomeCategory, ExpenseCategory, Currency, Account, BankExportFiles, ExchangeRate, TransactionCashback
 from .forms import BankExportFilesForm, DateCurrencyExchangeForm
 from .utils.halyk_parser import normalize_halyk_csv
 from .utils.fixed_api import fetch_exchange_rates_for_date, date_range
+
+
 
 
 class TransactionView(LoginRequiredMixin, generic.ListView):
@@ -623,3 +632,62 @@ def get_currency_exchange_rate(request):
         return render(request, 'money/currency.html', {'form': form})
 
     return HttpResponse("All OK!")
+
+@csrf_exempt
+@require_POST
+def upload_external_file(request):
+    # Проверяем токен
+    token = request.headers.get('Authorization')
+    if token != f'Token {settings.DOWNLOAD_API_TOKEN}':
+        return JsonResponse({'error': f"Unauthorized"}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    files = data.get('new_files')
+    if not files or not isinstance(files, list):
+        return JsonResponse({'error': 'Missing or invalid "new_files"'}, status=400)
+
+    # Загружаем в Yandex Object Storage
+    session = boto3.session.Session()
+    s3 = session.client(
+        service_name='s3',
+        endpoint_url=settings.YANDEX_ENDPOINT,
+        aws_access_key_id=settings.YANDEX_ACCESS_KEY,
+        aws_secret_access_key=settings.YANDEX_SECRET_KEY
+    )
+
+    results = []
+
+    for file_info in files:
+        filename = file_info.get('filename')
+        signed_url = file_info.get('signed_url')
+        if not filename or not signed_url:
+            results.append({'filename': filename, 'status': 'error', 'error': 'Missing filename or signed_url'})
+            continue
+
+        try:
+            # Качаем файл
+            response = requests.get(signed_url, stream=True, timeout=60)
+            response.raise_for_status()
+
+            # Используем временный файл
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                for chunk in response.iter_content(chunk_size=8192):
+                    tmp.write(chunk)
+                tmp_path = tmp.name
+
+            with open(tmp_path, 'rb') as data_file:
+                s3.upload_fileobj(data_file, settings.YANDEX_BUCKET, f'statement/{filename}')
+
+            # Чистим временный файл
+            os.remove(tmp_path)
+
+            results.append({'filename': filename, 'status': 'success'})
+
+        except Exception as e:
+            results.append({'filename': filename, 'status': 'error', 'error': str(e)})
+
+    return JsonResponse({'results': results}, status=200)
