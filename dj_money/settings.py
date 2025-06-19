@@ -145,3 +145,20 @@ YANDEX_ACCESS_KEY = env('YANDEX_ACCESS_KEY')
 YANDEX_SECRET_KEY = env('YANDEX_SECRET_KEY')
 YANDEX_BUCKET = env('YANDEX_BUCKET')
 YANDEX_ENDPOINT= env('YANDEX_ENDPOINT')
+
+CELERY_BROKER_URL = env('CELERY_BROKER_URL')
+
+# Указываем Redis как бэкенд для хранения результатов задач (опционально, но часто полезно)
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND')
+
+# Другие полезные настройки Celery (опционально):
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Australia/Brisbane'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60 # Ограничение времени выполнения задачи (30 минут)
+
+OPENAI_API_KEY = env('OPENAI_API_KEY')
+
+BATCH_CATEGORIZATION_SIZE = 10

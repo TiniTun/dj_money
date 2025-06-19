@@ -7,6 +7,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.utils.crypto import get_random_string
+from django.db import transaction as db_transaction
 import os
 import datetime
 import time
@@ -17,9 +18,13 @@ import json
 import tempfile
 from .models import Transaction, User, IncomeCategory, ExpenseCategory, Currency, Account, BankExportFiles, ExchangeRate, TransactionCashback
 from .forms import BankExportFilesForm, DateCurrencyExchangeForm
+from .decorators import token_required
 from .utils.halyk_parser import normalize_halyk_csv
 from .utils.fixed_api import fetch_exchange_rates_for_date, date_range
+from .tasks import process_statement_import, categorize_transactions_batch, upload_files
 
+
+from .parsers.bcc_parser import BccStatementParser
 
 
 
@@ -635,12 +640,8 @@ def get_currency_exchange_rate(request):
 
 @csrf_exempt
 @require_POST
+@token_required
 def upload_external_file(request):
-    # Проверяем токен
-    token = request.headers.get('Authorization')
-    if token != f'Token {settings.DOWNLOAD_API_TOKEN}':
-        return JsonResponse({'error': f"Unauthorized"}, status=401)
-
     try:
         data = json.loads(request.body)
     except Exception:
@@ -648,7 +649,7 @@ def upload_external_file(request):
 
     files = data.get('new_files')
     if not files or not isinstance(files, list):
-        return JsonResponse({'error': 'Missing or invalid "new_files"'}, status=400)
+        return JsonResponse({'results': {'status': 'error', 'error': 'Missing or invalid "new_files"'}}, status=200)
 
     # Загружаем в Yandex Object Storage
     session = boto3.session.Session()
@@ -660,6 +661,7 @@ def upload_external_file(request):
     )
 
     results = []
+    task_ids = []
 
     for file_info in files:
         filename = file_info.get('filename')
@@ -667,27 +669,59 @@ def upload_external_file(request):
         if not filename or not signed_url:
             results.append({'filename': filename, 'status': 'error', 'error': 'Missing filename or signed_url'})
             continue
-
-        try:
-            # Качаем файл
-            response = requests.get(signed_url, stream=True, timeout=60)
-            response.raise_for_status()
-
-            # Используем временный файл
-            with tempfile.NamedTemporaryFile(delete=False) as tmp:
-                for chunk in response.iter_content(chunk_size=8192):
-                    tmp.write(chunk)
-                tmp_path = tmp.name
-
-            with open(tmp_path, 'rb') as data_file:
-                s3.upload_fileobj(data_file, settings.YANDEX_BUCKET, f'statement/{filename}')
-
-            # Чистим временный файл
-            os.remove(tmp_path)
-
-            results.append({'filename': filename, 'status': 'success'})
-
-        except Exception as e:
-            results.append({'filename': filename, 'status': 'error', 'error': str(e)})
+        
+        tasks = upload_files.delay(request.user.id, filename, signed_url, settings.YANDEX_BUCKET)
+        task_ids.append(tasks.id)
+        
+    results.append({'status': 'success', 'message': 'Tasks started successfully', 'celery_task_ids': task_ids})
 
     return JsonResponse({'results': results}, status=200)
+
+@csrf_exempt
+@require_POST
+@token_required
+def parse_statement_files(request):
+    results = []
+    try:
+        files_pending = BankExportFiles.objects.filter(status=BankExportFiles.Status.PENDING)
+        
+        task_ids = []
+
+        for file in files_pending:
+            task = process_statement_import.delay(settings.YANDEX_BUCKET, file.id)
+            task_ids.append(task.id)
+
+        results.append({'status': 'success', 'message': 'Tasks started successfully', 'celery_task_ids': task_ids})
+    except Exception as e:
+        results.append({'status': 'error', 'error': str(e)})
+
+    return JsonResponse({'results': results}, status=200)
+
+
+@csrf_exempt
+@require_POST
+@token_required
+def run_batch_categorization(request):
+    # 1. Select all transactions without a category
+    qs = Transaction.objects.filter(category__isnull=True).order_by('id')
+    ids = list(qs.values_list('id', flat=True))
+
+    # 2. Split into bundles of 10
+    def chunks(lst, n):
+        # Yield successive n-sized chunks from lst
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
+
+    batches = list(chunks(ids, settings.BATCH_CATEGORIZATION_SIZE))
+    task_ids = []
+
+    # 3. Run a task for each bundle
+    for batch in batches:
+        task = categorize_transactions_batch.delay(batch)
+        task_ids.append(task.id)
+
+    return JsonResponse({'results': {
+        "status": "success",
+        "message": f"Task started successfully: {len(batches)} batches created. Transaction to be categorized: {len(ids)}",
+        "celery_task_ids": task_ids
+    }}, status=200)

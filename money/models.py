@@ -11,6 +11,7 @@ class ExpenseCategory(models.Model):
     name = models.CharField(max_length=255)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     parent_category = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE)
+    for_categorized = models.BooleanField(default=True, help_text="Use this category for categorization of transactions")
 
 
     def __str__(self):
@@ -72,6 +73,37 @@ class Account(models.Model):
     def __str__(self):
         return self.name
 
+class BankExportFiles(models.Model):
+    BANK_TYPE = (
+        ('halyk', 'Halyk'),
+        ('ziirat', 'Ziirat'),
+        ('deniz', 'Deniz'),
+        ('kaspikz', 'Kaspi.kz'),
+        ('bcc', 'BCC.kz')
+    )
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'В ожидании'
+        PROCESSING = 'PROCESSING', 'В обработке'
+        COMPLETED = 'COMPLETED', 'Завершено'
+        FAILED = 'FAILED', 'Ошибка'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='statement_imports') 
+    description = models.CharField(max_length=255, blank=True)
+    document = models.FileField(upload_to='files/', validators=[validate_file_extension], null=True, blank=True)
+    sourse = models.CharField(max_length=10, choices=BANK_TYPE, default='bcc', help_text="Source bank type")
+    uploaded_at = models.DateTimeField(auto_now_add=True, help_text="Date and time of file upload")
+    processed_at = models.DateTimeField(null=True, blank=True)
+    s3_file_key = models.CharField(max_length=1024, help_text="Files key in S3", blank=True, null=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    notes = models.TextField(blank=True, help_text="Notes or comments about the import process")
+
+    class Meta:
+        unique_together = ('user', 's3_file_key', 'sourse')
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"Import {self.id} to {self.uploaded_at.strftime('%Y-%m-%d %H:%M')} - {self.status}"
+
 class Transaction(models.Model):
     TRANSACTION_TYPE = (
         ('expense', 'Расход'),
@@ -91,20 +123,34 @@ class Transaction(models.Model):
     date = models.DateField()
     date_processing = models.DateField(default=None)
     comment = models.TextField(blank=True)
+    place = models.TextField(blank=True, null=True)
     account = models.ForeignKey(Account, on_delete=models.CASCADE, default=1)
     to_account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='%(class)s_to_account', null=True, blank=True)
+    statement_import = models.ForeignKey(BankExportFiles, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
+
+    class Meta:
+        # Этот уникальный индекс предотвратит создание дубликатов транзакций
+        # при повторной загрузке одного и того же файла.
+        unique_together = ('account', 'transaction_type', 'date', 'date_processing', 'original_amount', 'original_currency', 'comment')
+        ordering = ['-date']
 
     def __str__(self):
         return f"{self.user} - {self.transaction_type} - {self.amount}"
     
     def save(self, *args, **kwargs):
-        if self.original_amount:
+        if self.original_amount and self.amount:
             self.exchange_rate = abs(float(self.amount) / float(self.original_amount))
         elif self.exchange_rate:
             if self.original_currency.code == 'USD' and self.currency.code != 'USD':
-                self.original_amount = float(self.amount) / float(self.exchange_rate)
+                if self.amount:
+                    self.original_amount = float(self.amount) / float(self.exchange_rate)
+                else:
+                    self.amount = float(self.original_amount) * float(self.exchange_rate)
             elif self.original_currency.code != 'USD' and self.currency.code == 'USD':
-                self.original_amount = float(self.amount) * float(self.exchange_rate)
+                if self.amount:
+                    self.original_amount = float(self.amount) * float(self.exchange_rate)
+                else:
+                    self.amount = float(self.original_amount) / float(self.exchange_rate)
         if self.transaction_type == 'transfer':
             if not self.to_account:
                 raise ValidationError(f'The beneficiary\'s account is required for the "Transfer" type. {self.amount}')
@@ -116,19 +162,6 @@ class Transaction(models.Model):
             #    raise ValidationError('Insufficient funds on the sender\'s account')
         
         super(Transaction, self).save(*args, **kwargs)
-
-class BankExportFiles(models.Model):
-    BANK_TYPE = (
-        ('halyk', 'Halyk'),
-        ('ziirat', 'Ziirat'),
-        ('deniz', 'Deniz'),
-        ('kaspikz', 'Kaspi.kz'),
-        ('bcc', 'BCC.kz')
-    )
-    description = models.CharField(max_length=255, blank=True)
-    document = models.FileField(upload_to='files/', validators=[validate_file_extension])
-    sourse = models.CharField(max_length=10, choices=BANK_TYPE, default='halyk')
-    uploaded_at = models.DateTimeField(auto_now_add=True)
 
 class TransactionCashback(models.Model):
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE)
