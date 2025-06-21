@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   web:
     build:
@@ -25,7 +24,6 @@ services:
       - .env
     depends_on:
       - redis
-      - db
 volumes:
   postgres_data:
   redis_data:
