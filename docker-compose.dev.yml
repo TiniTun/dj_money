@@ -1,0 +1,41 @@
+version: "3.9"
+services:
+  web:
+    build: .
+    ports:
+      - 8000:8000
+    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; python manage.py runserver 0.0.0.0:8000'
+    depends_on:
+      - db
+      - redis
+  db:
+    image: postgres:14
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    expose:
+      - 5432
+    environment:
+      - POSTGRES_USER=dj_money
+      - POSTGRES_PASSWORD=dj_money
+      - POSTGRES_DB=dj_money
+      - POSTGRES_HOST_AUTH_METHOD=trust
+  redis:
+    image: "redis:alpine"
+    command: ["redis-server", "--requirepass", "dj_money"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+  celery_worker: # Новый сервис для Celery worker
+    build: . # Используем тот же Dockerfile, что и для web
+    command: celery -A dj_money worker -l info # Команда для запуска воркера
+    volumes: # Монтируем код приложения
+      - .:/app
+    env_file:
+      - .env
+    depends_on: # Celery worker зависит от Redis и базы данных
+      - redis
+      - db
+volumes:
+  postgres_data:
+  redis_data:
