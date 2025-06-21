@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+    volumes:
+      - ./staticfiles:/home/app/web/staticfiles
+      - ./media:/home/app/web/media
     ports:
       - 8000:8000
     command: gunicorn dj_money.wsgi:application --bind 0.0.0.0:8000
@@ -13,8 +16,6 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     command: celery -A dj_money worker -l info
-    volumes:
-      - .:/app
     env_file:
       - .env
     depends_on:
