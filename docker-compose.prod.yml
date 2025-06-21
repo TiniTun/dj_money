@@ -8,15 +8,10 @@ services:
     command: gunicorn dj_money.wsgi:application --bind 0.0.0.0:8000
     depends_on:
       - redis
-  redis:
-    image: "redis:alpine"
-    command: ["redis-server", "--requirepass", "dj_money"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
   celery_worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
     command: celery -A dj_money worker -l info
     volumes:
       - .:/app
@@ -24,6 +19,3 @@ services:
       - .env
     depends_on:
       - redis
-volumes:
-  postgres_data:
-  redis_data:

@@ -18,13 +18,6 @@ services:
       - POSTGRES_PASSWORD=dj_money
       - POSTGRES_DB=dj_money
       - POSTGRES_HOST_AUTH_METHOD=trust
-  redis:
-    image: "redis:alpine"
-    command: ["redis-server", "--requirepass", "dj_money"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
   celery_worker: # Новый сервис для Celery worker
     build: . # Используем тот же Dockerfile, что и для web
     command: celery -A dj_money worker -l info # Команда для запуска воркера
@@ -37,4 +30,3 @@ services:
       - db
 volumes:
   postgres_data:
-  redis_data:
