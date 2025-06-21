@@ -1,5 +1,6 @@
 asgiref
 Django==5.2.3
+gunicorn
 sqlparse
 psycopg2-binary
 django-environ
