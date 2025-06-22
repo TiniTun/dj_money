@@ -8,11 +8,14 @@ from django.utils import timezone
 from django.db import transaction as db_transaction
 from openai import OpenAI
 
-from .models import Transaction, BankExportFiles, Account, User, Currency, ExpenseCategory
+from .models import Transaction, BankExportFiles, Account, User, Currency, ExpenseCategory, GptLog, PlaceCategoryMapping
 from .parsers.bcc_parser import BccStatementParser
 from .utils.s3_utils import get_s3_client
 
+from yandex_cloud_ml_sdk import YCloudML
+
 oai_client = OpenAI(api_key = settings.OPENAI_API_KEY)
+ya_sdk = YCloudML(folder_id=settings.YANDEX_ID_FOLDER, auth=settings.YANDEX_GPT_SECRET_KEY)
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60) # bind=True для доступа к self (для retry)
 def upload_files(self, user_id, filename, signed_url, bucket_name):
@@ -56,6 +59,33 @@ def upload_files(self, user_id, filename, signed_url, bucket_name):
     except Exception as e:
         raise self.retry(exc=e) # Повторить задачу в случае ошибки
 
+def _find_category_for_place(place, user):
+    """
+    Finds a pre-defined category for a given place based on user's mapping rules.
+    """
+    if not place:
+        return None
+
+    # 1. Check for an exact match first (more specific)
+    exact_match = PlaceCategoryMapping.objects.filter(
+        user=user,
+        place_keyword__iexact=place,
+        match_type=PlaceCategoryMapping.MatchType.EXACT
+    ).first()
+    if exact_match:
+        return exact_match.category
+
+    # 2. Check for 'contains' matches
+    contains_rules = PlaceCategoryMapping.objects.filter(
+        user=user,
+        match_type=PlaceCategoryMapping.MatchType.CONTAINS
+    )
+    for rule in contains_rules:
+        # Case-insensitive check
+        if rule.place_keyword.lower() in place.lower():
+            return rule.category
+
+    return None
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60) # bind=True для доступа к self (для retry)
@@ -103,6 +133,10 @@ def process_statement_import(self, bucket_name, object_key):
                 income_category = None
                 expense_category = None
                 to_account = None
+
+                # Ищем категорию по справочнику, если это расход и есть место
+                if tx_data['type'] == 'expense' and tx_data.get('place'):
+                    expense_category = _find_category_for_place(tx_data['place'], user)
 
                 exchange_rate_value = None
                 if tx_data.get('rate') is not None:
@@ -160,24 +194,63 @@ def process_statement_import(self, bucket_name, object_key):
             bank_statement.save()
         raise self.retry(exc=e) # Повторить задачу в случае ошибки
 
+def _gpt_model(prompt):
+    response = oai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0
+    )
+    result = response.choices[0].message.content.strip()
+    return result
+
+def _ya_model(prompt):
+    model = ya_sdk.models.completions("yandexgpt", model_version="rc")
+    model = model.configure(temperature=0)
+    result = model.run(
+        [
+            {"role": "system", "text": "Ты — полезный ассистент, который помогает классифицировать транзакции."},
+            {
+                "role": "user",
+                "text": prompt,
+            }
+        ]
+    )
+    return result.alternatives[0].text.strip()
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def categorize_transactions_batch(self, transaction_ids):
+    log_entry = GptLog.objects.create(
+        celery_task_id=self.request.id,
+        model_name='yandexgpt'
+    )
     try:
         transactions = Transaction.objects.filter(category__isnull=True, id__in=transaction_ids)
+        if not transactions.exists():
+            result_message = "No transactions to categorize in this batch (they might have been processed already)."
+            log_entry.status = GptLog.Status.SUCCESS
+            log_entry.result = result_message
+            log_entry.save()
+            return result_message
+
         categories = ExpenseCategory.objects.filter(for_categorized=True)
 
         categories_list = []
 
         for category in categories:
             if category.parent_category:
-                categories_list.append(f'{category.id}-{category.name}')
+                parent_category = ExpenseCategory.objects.filter(id = category.parent_category.id).first()
+                categories_list.append(f'{category.id}-{parent_category.name}:{category.name}')
+            else:
+                categories_list.append(f'{category.id}-Main:{category.name}')
+
 
         categories_str = ';'.join(categories_list)
 
         # Готовим батч для GPT
         prompt = (
-            f"Вот список категорий транзакций разделенных знаком \";\": {categories_str}.\n"
+            f"Вот список категорий транзакций разделенных знаком \";\" каждая и в формате <id категории>-<название родительсой категории>:<название категории>: {categories_str}.\n"
             f"Для каждой строки определи, к какой категории из списка она относится. "
             "Ответ верни в формате: <номер строки>. <категория>.\n\n"
         )
@@ -185,16 +258,18 @@ def categorize_transactions_batch(self, transaction_ids):
             prompt += f"{i}. {t.place} \n"
        
         prompt += "\nТолько категории, никаких комментариев."
+        
+        # Сохраняем промпт в лог
+        log_entry.prompt = prompt
+        log_entry.save(update_fields=['prompt'])
 
         # Отправляем в OpenAI
-        response = oai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0
-        )
-        result = response.choices[0].message.content.strip()
+        result = _ya_model(prompt)
+        
+        # Сохраняем результат в лог
+        log_entry.result = result
+        log_entry.status = GptLog.Status.SUCCESS
+        log_entry.save(update_fields=['result', 'status', 'updated_at'])
 
         with db_transaction.atomic():
             lines = result.splitlines()
@@ -212,4 +287,8 @@ def categorize_transactions_batch(self, transaction_ids):
                 
         return f"Categorized {transactions.count()} transactions successfully."
     except Exception as e:
+        # В случае ошибки обновляем лог
+        log_entry.status = GptLog.Status.FAILED
+        log_entry.error_message = str(e)
+        log_entry.save(update_fields=['status', 'error_message', 'updated_at'])
         raise self.retry(exc=e)

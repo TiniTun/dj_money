@@ -28,5 +28,14 @@ services:
     depends_on: # Celery worker зависит от Redis и базы данных
       - redis
       - db
+  flower: # Новый сервис для Flower
+    build: .
+    command: celery -A dj_money flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+    depends_on:
+      - redis
 volumes:
   postgres_data:

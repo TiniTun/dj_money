@@ -147,6 +147,9 @@ YANDEX_SECRET_KEY = env('YANDEX_SECRET_KEY')
 YANDEX_BUCKET = env('YANDEX_BUCKET')
 YANDEX_ENDPOINT= env('YANDEX_ENDPOINT')
 
+YANDEX_GPT_SECRET_KEY= env('YANDEX_GPT_SECRET_KEY')
+YANDEX_ID_FOLDER= env('YANDEX_ID_FOLDER')
+
 CELERY_BROKER_URL = env('CELERY_BROKER_URL')
 
 # Указываем Redis как бэкенд для хранения результатов задач (опционально, но часто полезно)

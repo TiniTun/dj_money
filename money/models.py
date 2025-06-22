@@ -179,3 +179,40 @@ class TransactionCashback(models.Model):
 #            instance.account.save()
 #            instance.to_account.balance += instance.amount
 #            instance.to_account.save()
+
+class GptLog(models.Model):
+    """Model for logging requests to GPT models."""
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'В ожидании'
+        SUCCESS = 'SUCCESS', 'Успешно'
+        FAILED = 'FAILED', 'Ошибка'
+
+    celery_task_id = models.CharField(max_length=255, unique=True, db_index=True, help_text="Celery task ID")
+    model_name = models.CharField(max_length=100, help_text="The name of the model used")
+    prompt = models.TextField(help_text="The full prompt sent to the model")
+    result = models.TextField(blank=True, help_text="The full result received from the model")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Log for task {self.celery_task_id} - {self.status}"
+
+class PlaceCategoryMapping(models.Model):
+    """A dictionary to automatically map a place/keyword to a category."""
+    class MatchType(models.TextChoices):
+        EXACT = 'EXACT', 'Точное совпадение'
+        CONTAINS = 'CONTAINS', 'Содержит'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, help_text="The user this rule belongs to.")
+    place_keyword = models.CharField(max_length=255, db_index=True, help_text="Keyword to match in the transaction's place/comment.")
+    category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE, help_text="The category to assign if a match is found.")
+    match_type = models.CharField(max_length=10, choices=MatchType.choices, default=MatchType.CONTAINS)
+
+    class Meta:
+        unique_together = ('user', 'place_keyword', 'category')
+        ordering = ['-id']
+
+    def __str__(self):
+        return f"'{self.place_keyword}' -> '{self.category.name}' for {self.user.username}"
