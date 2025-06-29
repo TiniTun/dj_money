@@ -3,10 +3,10 @@ import re
 from datetime import datetime
 from decimal import Decimal
 from bs4 import BeautifulSoup
+from .base_parser import BaseParser
 
-class BccStatementParser:
+class BccStatementParser(BaseParser):
     def __init__(self, file_content):
-        # BeautifulSoup лучше работает с lxml парсером
         self.soup = BeautifulSoup(file_content, 'html.parser')
         self.data = {
             'header': {},
@@ -14,16 +14,6 @@ class BccStatementParser:
             'totals': {},
             'balances': {}
         }
-
-    def _clean_text(self, text):
-        return text.strip()
-
-    def _parse_amount(self, amount_str):
-        if not amount_str or not amount_str.strip():
-            return None
-        # Убираем пробелы-разделители и заменяем запятую на точку, если нужно
-        cleaned_str = amount_str.strip().replace(' ', '').replace(',', '.')
-        return Decimal(cleaned_str)
 
     def _parse_header(self):
         header_data = {}
@@ -86,15 +76,25 @@ class BccStatementParser:
             if len(cols) != 5:
                 continue
 
-            debit_str = self._clean_text(cols[2].text)
-            credit_str = self._clean_text(cols[3].text)
+            # Парсим дополнительные данные из колонки с описанием
+            parse_data = self._parse_transaction_line(cols[4].text)
+            if parse_data:
+                real_date =  datetime.strptime(parse_data.get('date'), '%d.%m.%Y %H:%M:%S').date()
+                place = parse_data.get('place')
+                currency = parse_data.get('currency')
+                rate = self._parse_amount(parse_data.get('rate'))
+            else:
+                continue
+
+            debit = self._parse_amount(cols[2].text)
+            credit = self._parse_amount(cols[3].text)
             
             # Определяем тип и сумму
-            if debit_str:
-                amount = self._parse_amount(debit_str)
+            if debit:
+                amount = -debit
                 trans_type = 'expense'
-            elif credit_str:
-                amount = self._parse_amount(credit_str)
+            elif credit:
+                amount = credit
                 trans_type = 'income'
             else:
                 continue # Пропускаем, если нет ни дебета ни кредита
@@ -103,22 +103,10 @@ class BccStatementParser:
             date_str = self._clean_text(cols[1].text)
             trans_date = datetime.strptime(date_str, '%d.%m.%Y').date()
 
-            # Парсим дополнительные данные из колонки с описанием
-            parse_data = self._parse_transaction_line(cols[4].text)
-            if not parse_data:
-                trans_type = 'transfer'
-            else:
-                real_date =  datetime.strptime(parse_data.get('date'), '%d.%m.%Y %H:%M:%S').date()
-                place = parse_data.get('place')
-                currency = parse_data.get('currency')
-                rate = parse_data.get('rate')
-
-
-
             self.data['transactions'].append({
                 'trans_date': trans_date,
                 'real_date': real_date,
-                'place': place, # @todo Место транзакции, добавить в модель
+                'place': place,
                 'currency': currency,
                 'rate': self._parse_amount(rate),
                 'description': self._clean_text(cols[4].text),

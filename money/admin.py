@@ -15,6 +15,7 @@ from .models import ExchangeRate
 from .models import TransactionCashback
 from .models import GptLog
 from .models import PlaceCategoryMapping
+from .models import BankSource
 
 admin.site.register(Currency)
 admin.site.register(BankCard)
@@ -73,6 +74,11 @@ class GptLogAdmin(admin.ModelAdmin):
     list_filter = ('status', 'model_name', 'created_at')
     search_fields = ('celery_task_id', 'prompt', 'result')
     readonly_fields = ('celery_task_id', 'model_name', 'prompt', 'result', 'status', 'error_message', 'created_at', 'updated_at')
+
+@admin.register(BankSource)
+class BankSourceAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code')
+    search_fields = ('name', 'code')
 
 class ExpenseCategoryInLine(admin.TabularInline):
     model = ExpenseCategory

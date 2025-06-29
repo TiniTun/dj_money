@@ -6,7 +6,7 @@ from money.models import Currency, ExchangeRate  # replace 'your_app' with your 
 def fetch_historical_exchange_rates(start_date: date, end_date: date, base_currency_code='USD'):
     access_key = settings.FIXER_API_KEY  # replace with your actual API key
 
-    target_currency_codes = ['RUB', 'TRY', 'EUR', 'KZT', 'AUD']
+    target_currency_codes = ['RUB', 'KZT', 'AUD']
     symbols = ','.join(target_currency_codes)
 
     try:
@@ -51,7 +51,7 @@ def fetch_historical_exchange_rates(start_date: date, end_date: date, base_curre
 def fetch_exchange_rates_for_date(target_date: date, extra_currency=None, only_extra=False, base_currency_code='USD'):
     access_key = settings.FIXER_API_KEY  # replace with your actual API key
 
-    target_currency_codes = ['RUB', 'TRY', 'EUR', 'KZT', 'AUD']
+    target_currency_codes = ['RUB', 'KZT', 'AUD']
     if only_extra:
         symbols = extra_currency
     else:

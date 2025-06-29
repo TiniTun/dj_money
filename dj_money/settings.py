@@ -42,6 +42,8 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 INSTALLED_APPS = [
     'polls.apps.PollsConfig',
     'money.apps.MoneyConfig',
+    'django_celery_results',
+    'django_celery_beat',
     'blog.apps.BlogConfig',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -88,6 +90,10 @@ WSGI_APPLICATION = 'dj_money.wsgi.application'
 DATABASES = {
     'default': env.db()
 }
+
+# Disable server-side cursors to prevent "InvalidCursorName" errors,
+# which can occur with some database configurations or connection poolers (like PgBouncer).
+DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 
 
 # Password validation
@@ -151,9 +157,7 @@ YANDEX_GPT_SECRET_KEY= env('YANDEX_GPT_SECRET_KEY')
 YANDEX_ID_FOLDER= env('YANDEX_ID_FOLDER')
 
 CELERY_BROKER_URL = env('CELERY_BROKER_URL')
-
-# Указываем Redis как бэкенд для хранения результатов задач (опционально, но часто полезно)
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND')
+CELERY_RESULT_BACKEND = 'django-db'
 
 # Другие полезные настройки Celery (опционально):
 CELERY_ACCEPT_CONTENT = ['json']
@@ -166,3 +170,6 @@ CELERY_TASK_TIME_LIMIT = 30 * 60 # Ограничение времени вып�
 OPENAI_API_KEY = env('OPENAI_API_KEY')
 
 BATCH_CATEGORIZATION_SIZE = 10
+
+# Directory for temporary files shared between containers
+SHARED_TMP_DIR = BASE_DIR / "tmp"

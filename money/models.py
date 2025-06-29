@@ -73,14 +73,19 @@ class Account(models.Model):
     def __str__(self):
         return self.name
 
+class BankSource(models.Model):
+    """Represents a source of a bank statement, e.g., a bank."""
+    name = models.CharField(max_length=100, unique=True, help_text="Human-readable name of the bank (e.g., 'Halyk Bank').")
+    code = models.SlugField(max_length=20, unique=True, help_text="A unique code for programmatic access (e.g., 'halyk').")
+    parser = models.CharField(max_length=255, null=True, blank=True, help_text="Name parser's Class")
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 class BankExportFiles(models.Model):
-    BANK_TYPE = (
-        ('halyk', 'Halyk'),
-        ('ziirat', 'Ziirat'),
-        ('deniz', 'Deniz'),
-        ('kaspikz', 'Kaspi.kz'),
-        ('bcc', 'BCC.kz')
-    )
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'В ожидании'
         PROCESSING = 'PROCESSING', 'В обработке'
@@ -90,7 +95,7 @@ class BankExportFiles(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='statement_imports') 
     description = models.CharField(max_length=255, blank=True)
     document = models.FileField(upload_to='files/', validators=[validate_file_extension], null=True, blank=True)
-    sourse = models.CharField(max_length=10, choices=BANK_TYPE, default='bcc', help_text="Source bank type")
+    source = models.ForeignKey(BankSource, on_delete=models.PROTECT, help_text="Source bank")
     uploaded_at = models.DateTimeField(auto_now_add=True, help_text="Date and time of file upload")
     processed_at = models.DateTimeField(null=True, blank=True)
     s3_file_key = models.CharField(max_length=1024, help_text="Files key in S3", blank=True, null=True)
@@ -98,7 +103,7 @@ class BankExportFiles(models.Model):
     notes = models.TextField(blank=True, help_text="Notes or comments about the import process")
 
     class Meta:
-        unique_together = ('user', 's3_file_key', 'sourse')
+        unique_together = ('user', 's3_file_key', 'source')
         ordering = ['-uploaded_at']
 
     def __str__(self):
@@ -151,6 +156,19 @@ class Transaction(models.Model):
                     self.original_amount = float(self.amount) * float(self.exchange_rate)
                 else:
                     self.amount = float(self.original_amount) / float(self.exchange_rate)
+        else:
+            # Find the exchange rate safely
+            rate_obj = ExchangeRate.objects.filter(target_currency = self.currency, date = self.date).first()
+            if rate_obj:
+                self.exchange_rate = rate_obj.exchange_rate
+            else:
+                self.exchange_rate = 1 # @todo change to default value
+
+            if self.amount:
+                self.original_amount = float(self.amount) / float(self.exchange_rate)
+            elif self.original_amount:
+                self.amount = float(self.original_amount) * float(self.exchange_rate)
+
         if self.transaction_type == 'transfer':
             if not self.to_account:
                 raise ValidationError(f'The beneficiary\'s account is required for the "Transfer" type. {self.amount}')

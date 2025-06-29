@@ -6,6 +6,7 @@ services:
     volumes:
       - ./staticfiles:/home/app/web/staticfiles
       - ./media:/home/app/web/media
+      - shared_tmp:/home/app/web/tmp
     ports:
       - 8000:8000
     command: gunicorn dj_money.wsgi:application --bind 0.0.0.0:8000
@@ -15,8 +16,24 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+    volumes:
+      - shared_tmp:/home/app/web/tmp
     command: celery -A dj_money worker -l info
     env_file:
       - .env
     depends_on:
       - redis
+      - web
+  celery_beat: # Celery Beat
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    command: celery -A dj_money beat -l info --scheduler django_celery_beat.schedulers.DatabaseScheduler
+    env_file:
+      - .env
+    depends_on: 
+      - redis
+      - web 
+
+volumes:
+  shared_tmp:
