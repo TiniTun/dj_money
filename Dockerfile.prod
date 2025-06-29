@@ -48,6 +48,9 @@ ENV APP_HOME=/home/app/web
 RUN mkdir $APP_HOME
 WORKDIR $APP_HOME
 
+# install system dependencies for final stage (su-exec for dropping privileges)
+RUN apt-get update && apt-get install -y --no-install-recommends su-exec && rm -rf /var/lib/apt/lists/*
+
 # install dependencies
 COPY --from=builder /usr/src/app/wheels /wheels
 COPY --from=builder /app/requirements.txt .
@@ -57,8 +60,11 @@ RUN pip install --no-cache /wheels/*
 # copy project
 COPY . $APP_HOME
 
+# copy entrypoint script
+COPY ./entrypoint.prod.sh /entrypoint.prod.sh
+RUN chmod +x /entrypoint.prod.sh
+
 # chown all the files to the app user
 RUN chown -R app:app $APP_HOME
 
-# change to the app user
-USER app
+ENTRYPOINT ["/entrypoint.prod.sh"]
