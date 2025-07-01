@@ -8,4 +8,4 @@ chown -R app:app /home/app/web/tmp
 
 # Drop privileges and execute the main command (passed as arguments to this script)
 # as the non-root 'app' user.
-exec su-exec app "$@"
+exec gosu app "$@"
