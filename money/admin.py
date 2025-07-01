@@ -16,6 +16,7 @@ from .models import TransactionCashback
 from .models import GptLog
 from .models import PlaceCategoryMapping
 from .models import BankSource
+from .models import TransactionCategoryLog
 
 admin.site.register(Currency)
 admin.site.register(BankCard)
@@ -74,6 +75,18 @@ class GptLogAdmin(admin.ModelAdmin):
     list_filter = ('status', 'model_name', 'created_at')
     search_fields = ('celery_task_id', 'prompt', 'result')
     readonly_fields = ('celery_task_id', 'model_name', 'prompt', 'result', 'status', 'error_message', 'created_at', 'updated_at')
+
+@admin.register(TransactionCategoryLog)
+class TransactionCategoryLogAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'get_transaction_id', 'transaction__place', 'category_log', 'gpt_log')
+    search_fields = ('transaction__id', 'category_log')
+    list_select_related = ('transaction', 'gpt_log') # Optimization for performance
+
+    @admin.display(description='Transaction ID', ordering='transaction__id')
+    def get_transaction_id(self, obj):
+        if obj.transaction:
+            return obj.transaction.id
+        return None
 
 @admin.register(BankSource)
 class BankSourceAdmin(admin.ModelAdmin):

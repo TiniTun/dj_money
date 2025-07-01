@@ -216,6 +216,17 @@ class GptLog(models.Model):
 
     def __str__(self):
         return f"Log for task {self.celery_task_id} - {self.status}"
+    
+class TransactionCategoryLog(models.Model):
+    """Model for logging categories assigned to GPT models."""
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE)
+    category_log = models.CharField(max_length=255)
+    gpt_log = models.ForeignKey(GptLog, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.created_at} - {self.transaction.id} - {self.category_log}'
+
 
 class PlaceCategoryMapping(models.Model):
     """A dictionary to automatically map a place/keyword to a category."""

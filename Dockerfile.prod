@@ -49,7 +49,11 @@ RUN mkdir $APP_HOME
 WORKDIR $APP_HOME
 
 # install system dependencies for final stage (su-exec for dropping privileges)
-RUN apt-get update && apt-get install -y --no-install-recommends su-exec && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends wget && \
+    wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.17/gosu-$(dpkg --print-architecture)" && \
+    chmod +x /usr/local/bin/gosu && \
+    apt-get purge -y --auto-remove wget && \
+    rm -rf /var/lib/apt/lists/*
 
 # install dependencies
 COPY --from=builder /usr/src/app/wheels /wheels

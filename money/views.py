@@ -168,7 +168,7 @@ def parse_statement_files(request):
 @token_required
 def run_batch_categorization(request):
     # 1. Select all transactions without a category
-    qs = Transaction.objects.filter(category__isnull=True, transaction_type = 'expense').order_by('id')
+    qs = Transaction.objects.filter(category__isnull = True, transaction_type = 'expense', place__isnull = False).order_by('id')
     ids = list(qs.values_list('id', flat=True))
 
     # 2. Split into bundles of 10

@@ -9,7 +9,7 @@ from django.db import transaction as db_transaction, IntegrityError
 from openai import OpenAI
 
 from datetime import date, datetime
-from .models import Transaction, BankExportFiles, Account, User, Currency, ExpenseCategory, GptLog, PlaceCategoryMapping, BankSource
+from .models import Transaction, BankExportFiles, Account, User, Currency, ExpenseCategory, GptLog, PlaceCategoryMapping, BankSource, TransactionCategoryLog
 from .parsers.bcc_parser import BccStatementParser
 from .parsers.ff_parser import FFStatementParser
 from .utils.s3_utils import get_s3_client
@@ -294,6 +294,7 @@ def categorize_transactions_batch(self, transaction_ids):
         celery_task_id=self.request.id,
         model_name='yandexgpt'
     )
+    
     try:
         transactions = Transaction.objects.filter(category__isnull=True, id__in=transaction_ids)
         if not transactions.exists():
@@ -350,8 +351,13 @@ def categorize_transactions_batch(self, transaction_ids):
                     if category_id:
                         expense_category = ExpenseCategory.objects.filter(id = int(category_id)).first()
 
-                    transaction.category = expense_category
-                    transaction.save(update_fields=["category"])
+                transaction.category = expense_category
+                transaction.save(update_fields=["category"])
+                TransactionCategoryLog.objects.create(
+                    transaction=transaction,
+                    category_log=parts[1].strip(),
+                    gpt_log=log_entry
+                )
             
                 
         return f"Categorized {transactions.count()} transactions successfully."
