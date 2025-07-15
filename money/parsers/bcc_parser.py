@@ -66,7 +66,7 @@ class BccStatementParser(BaseParser):
         
         rows = transaction_table.find_all('tr')
         # Пропускаем заголовок (th) и итоговую строку
-        for row in rows[1:-1]: # Пропускаем заголовок и итоговую строку
+        for row in rows[1:]: # Пропускаем заголовок и итоговую строку пока нет, потому что в верстке ошибка и table закрывактся раньше времени
             real_date = None
             place = None
             currency = None
