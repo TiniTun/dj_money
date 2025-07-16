@@ -1,6 +1,6 @@
 services:
   web:
-    build: .
+    build: . # use Dockerfile
     volumes:
       - shared_tmp:/app/tmp # Mounts the shared temp volume
     ports:
@@ -20,15 +20,15 @@ services:
       - POSTGRES_PASSWORD=dj_money
       - POSTGRES_DB=dj_money
       - POSTGRES_HOST_AUTH_METHOD=trust
-  celery_worker: # Новый сервис для Celery worker
-    build: . # Используем тот же Dockerfile, что и для web
-    command: celery -A dj_money worker -l info # Команда для запуска воркера
-    volumes: # Монтируем код приложения
+  celery_worker: # Celery worker
+    build: . # use Dockerfile
+    command: celery -A dj_money worker -l info # run worker
+    volumes:
       - .:/app # Mounts the project code
       - shared_tmp:/app/tmp # Mounts the shared temp volume
     env_file:
       - .env
-    depends_on: # Celery worker зависит от Redis и базы данных
+    depends_on:
       - redis
       - db
   celery_beat: # Celery Beat

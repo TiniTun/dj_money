@@ -2,7 +2,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile.prod # use Dockerfile.prod
     volumes:
       - ./staticfiles:/home/app/web/staticfiles
       - ./media:/home/app/web/media
