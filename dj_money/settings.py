@@ -40,7 +40,6 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 # Application definition
 
 INSTALLED_APPS = [
-    'polls.apps.PollsConfig',
     'money.apps.MoneyConfig',
     'django_celery_results',
     'django_celery_beat',
