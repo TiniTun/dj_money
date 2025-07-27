@@ -12,6 +12,7 @@ from datetime import date, datetime
 from .models import Transaction, BankExportFiles, Account, User, Currency, ExpenseCategory, GptLog, PlaceCategoryMapping, BankSource, TransactionCategoryLog
 from .parsers.bcc_parser import BccStatementParser
 from .parsers.ff_parser import FFStatementParser
+from .parsers.commbank_parser import CommbankStatementParser
 from .utils.s3_utils import get_s3_client
 from .utils.fixed_api import fetch_exchange_rates_for_date, date_range
 
@@ -20,6 +21,7 @@ from yandex_cloud_ml_sdk import YCloudML
 PARSER_MAP = {
     'BccStatementParser': BccStatementParser,
     'FFStatementParser': FFStatementParser,
+    'CommbankStatementParser': CommbankStatementParser,
 }
 
 oai_client = OpenAI(api_key = settings.OPENAI_API_KEY)
@@ -146,6 +148,7 @@ def process_statement_import(self, bucket_name, object_key):
             
             created_count = 0
             skipped_count = 0
+            print(transactions_data)
             for i, tx_data in enumerate(transactions_data):
                 amount = 0
                 original_amount = float(tx_data['amount'])
@@ -209,6 +212,8 @@ def process_statement_import(self, bucket_name, object_key):
                     'transaction_type': tx_data['type'],
                     'date': tx_data['real_date'],
                     'date_processing': tx_data.get('trans_date', tx_data['real_date']),
+                    'amount': amount, 
+                    'currency': currency,
                     'original_amount': original_amount,
                     'original_currency': original_currency,
                     'comment': tx_data['description'],
@@ -217,8 +222,6 @@ def process_statement_import(self, bucket_name, object_key):
                 defaults_params = {
                     'category': expense_category,
                     'income_category': income_category,
-                    'amount': amount, 
-                    'currency': currency,
                     'exchange_rate': exchange_rate_value,
                     'place': tx_data['place'],
                     'to_account': to_account,
@@ -243,6 +246,7 @@ def process_statement_import(self, bucket_name, object_key):
                     created_count += 1
                 else:
                     skipped_count += 1
+                    errors.append(f"Transaction already exists: {tx_data}. Skipping.")
 
         
         # Обновляем статус импорта

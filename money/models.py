@@ -136,7 +136,7 @@ class Transaction(models.Model):
     class Meta:
         # Этот уникальный индекс предотвратит создание дубликатов транзакций
         # при повторной загрузке одного и того же файла.
-        unique_together = ('account', 'transaction_type', 'date', 'date_processing', 'original_amount', 'original_currency', 'comment')
+        unique_together = ('account', 'transaction_type', 'date', 'date_processing', 'amount', 'currency', 'original_amount', 'original_currency', 'comment')
         ordering = ['-date']
 
     def __str__(self):
