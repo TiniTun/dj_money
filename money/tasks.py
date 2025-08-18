@@ -9,12 +9,13 @@ from django.db import transaction as db_transaction, IntegrityError
 from openai import OpenAI
 
 from datetime import date, datetime
-from .models import Transaction, BankExportFiles, Account, User, Currency, ExpenseCategory, GptLog, PlaceCategoryMapping, BankSource, TransactionCategoryLog
+from .models import Transaction, BankExportFiles, Account, User, Currency, ExpenseCategory, GptLog, PlaceCategoryMapping, BankSource, TransactionCategoryLog, ExchangeRate
 from .parsers.bcc_parser import BccStatementParser
 from .parsers.ff_parser import FFStatementParser
 from .parsers.commbank_parser import CommbankStatementParser
 from .utils.s3_utils import get_s3_client
 from .utils.fixed_api import fetch_exchange_rates_for_date, date_range
+from .utils.unirate_api import latest, timeseries
 
 from yandex_cloud_ml_sdk import YCloudML
 
@@ -373,7 +374,7 @@ def categorize_transactions_batch(self, transaction_ids):
         raise self.retry(exc=e)
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=180)
-def fetch_exchange_rates_task(self, start_date_str=None, end_date_str=None, extra_currency=None, only_extra=False):
+def upload_exchange_rates_task(self, start_date_str=None, end_date_str=None, extra_currency=None, only_extra=False):
     """
     Fetches exchange rates for a given date range in the background.
     """
@@ -387,12 +388,41 @@ def fetch_exchange_rates_task(self, start_date_str=None, end_date_str=None, extr
         else:
             end_date = date.fromisoformat(end_date_str)
 
-        for single_date in date_range(start_date, end_date):
-            fetch_exchange_rates_for_date(
-                single_date,
+        # If a single day is requested and it's today, use latest(); otherwise, use timeseries()
+        if start_date == end_date and start_date == date.today():
+            latest_payload = latest(for_date=start_date, extra_currency=extra_currency, only_extra=only_extra)
+
+            base_currency = Currency.objects.get(code=latest_payload['base'])
+            record_date = latest_payload['date']
+            for target_code, rate_value in (latest_payload.get('rates') or {}).items():
+                target_currency = Currency.objects.get(code=target_code)
+                ExchangeRate.objects.create(
+                    source_currency=base_currency,
+                    target_currency=target_currency,
+                    exchange_rate=rate_value,
+                    date=record_date,
+                )
+            return f"Successfully fetched exchange rates for {start_date.isoformat()}."
+        else:
+            ts_payload = timeseries(
+                start_date=start_date,
+                end_date=end_date,
                 extra_currency=extra_currency,
-                only_extra=only_extra
+                only_extra=only_extra,
             )
-        return f"Successfully fetched exchange rates from {start_date_str} to {end_date_str}."
+
+            base_currency = Currency.objects.get(code=ts_payload['base'])
+            data_map = ts_payload.get('data') or {}
+            for date_str, day_rates in data_map.items():
+                record_date = date.fromisoformat(date_str)
+                for target_code, rate_value in (day_rates or {}).items():
+                    target_currency = Currency.objects.get(code=target_code)
+                    ExchangeRate.objects.create(
+                        source_currency=base_currency,
+                        target_currency=target_currency,
+                        exchange_rate=rate_value,
+                        date=record_date,
+                    )
+            return f"Successfully fetched exchange rates from {start_date.isoformat()} to {end_date.isoformat()}."
     except Exception as e:
         raise self.retry(exc=e)

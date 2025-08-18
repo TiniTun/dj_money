@@ -21,7 +21,7 @@ from .forms import BankExportFilesForm, DateCurrencyExchangeForm
 from .decorators import token_required
 from .utils.halyk_parser import normalize_halyk_csv
 from .utils.s3_utils import get_s3_client
-from .tasks import process_statement_import, categorize_transactions_batch, upload_files, fetch_exchange_rates_task
+from .tasks import process_statement_import, categorize_transactions_batch, upload_files, upload_exchange_rates_task
 
 
 from .parsers.bcc_parser import BccStatementParser
@@ -92,7 +92,7 @@ def get_currency_exchange_rate(request):
             only_extra = form.cleaned_data['only_extra']
 
             # Запускаем задачу в Celery
-            task = fetch_exchange_rates_task.delay(
+            task = upload_exchange_rates_task.delay(
                 start_date.isoformat(),
                 end_date.isoformat(),
                 extra_currency=extra_currency,
