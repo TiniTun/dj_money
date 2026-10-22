@@ -11,9 +11,10 @@ VM=dj-money-vm
 SA=dj-money-vm@$PROJECT_ID.iam.gserviceaccount.com
 BUCKET=$PROJECT_ID-backups
 
-gcloud projects create "$PROJECT_ID" --name="dj_money"
+gcloud projects create "$PROJECT_ID" --name="dj-money"
 gcloud billing projects link "$PROJECT_ID" --billing-account="$BILLING_ACCOUNT"
-gcloud config set project "$PROJECT_ID"
+# Scope the project to this script instead of changing the global gcloud config
+export CLOUDSDK_CORE_PROJECT="$PROJECT_ID"
 gcloud services enable compute.googleapis.com sqladmin.googleapis.com storage.googleapis.com
 
 # Service account for the VM: may connect to Cloud SQL and write (not delete) backups
@@ -37,6 +38,8 @@ gcloud storage buckets create "gs://$BUCKET" --location="$REGION" \
 printf '{"rule":[{"action":{"type":"Delete"},"condition":{"age":90}}]}' > /tmp/dj-money-lifecycle.json
 gcloud storage buckets update "gs://$BUCKET" --lifecycle-file=/tmp/dj-money-lifecycle.json
 gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$SA" --role=roles/storage.objectCreator
+# gcloud storage cp checks the destination object first, so the VM also needs read access
+gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$SA" --role=roles/storage.objectViewer
 
 gcloud compute addresses create dj-money-ip --region="$REGION"
 gcloud compute firewall-rules create dj-money-web --network=default \
