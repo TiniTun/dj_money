@@ -41,6 +41,15 @@ gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAc
 # gcloud storage cp checks the destination object first, so the VM also needs read access
 gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$SA" --role=roles/storage.objectViewer
 
+# Uploaded bank statements. The app talks S3 to it with an HMAC key of a dedicated service account
+STATEMENTS=$PROJECT_ID-statements
+STORAGE_SA=dj-money-storage@$PROJECT_ID.iam.gserviceaccount.com
+gcloud storage buckets create "gs://$STATEMENTS" --location="$REGION" \
+  --uniform-bucket-level-access --public-access-prevention
+gcloud iam service-accounts create dj-money-storage --display-name="dj_money app storage (HMAC)"
+gcloud storage buckets add-iam-policy-binding "gs://$STATEMENTS" --member="serviceAccount:$STORAGE_SA" --role=roles/storage.objectAdmin
+echo "Create the app's HMAC key with: gcloud storage hmac create $STORAGE_SA (the secret is shown once)"
+
 gcloud compute addresses create dj-money-ip --region="$REGION"
 gcloud compute firewall-rules create dj-money-web --network=default \
   --allow=tcp:80,tcp:443 --target-tags=dj-money-web
