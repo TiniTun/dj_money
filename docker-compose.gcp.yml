@@ -1,11 +1,12 @@
 # Production stack for a single GCE VM. Postgres lives in Cloud SQL behind the auth proxy.
-# Usage on the VM: docker compose -f docker-compose.gcp.yml up -d --build
+# Deployed by GitHub Actions through deploy/gcp/deploy.sh, which pins APP_IMAGE in .env.
+# Manual fallback on the VM: docker compose -f docker-compose.gcp.yml up -d --build
 
 x-app: &app
   build:
     context: .
     dockerfile: Dockerfile.prod
-  image: dj_money:prod
+  image: ${APP_IMAGE:-dj_money:prod}
   env_file: .env
   restart: unless-stopped
   depends_on:

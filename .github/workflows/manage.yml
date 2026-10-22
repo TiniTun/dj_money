@@ -1,0 +1,46 @@
+# Run a one-off manage.py command in production from the Actions tab, e.g.
+#   backfill_exchange_rates --start 2021-01-01
+# Only people with write access to the repository can start it, and only from main.
+name: Manage
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: manage.py command with arguments
+        required: true
+
+# Shares the group with deploys so a command never runs in the middle of a rollout
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: dj-money-d4ee
+  ZONE: australia-southeast1-b
+  VM: dj-money-vm
+  WIF_PROVIDER: projects/783994019028/locations/global/workloadIdentityPools/github/providers/dj-money
+  DEPLOY_SA: github-deploy@dj-money-d4ee.iam.gserviceaccount.com
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: manage.py ${{ inputs.command }}
+        env:
+          COMMAND: ${{ inputs.command }}
+        # Each word is shell-quoted, so the input can only become manage.py arguments
+        run: |
+          read -ra ARGS <<< "$COMMAND"
+          REMOTE="cd /opt/dj_money && deploy/gcp/manage.sh $(printf '%q ' "${ARGS[@]}")"
+          gcloud compute ssh "$VM" --zone="$ZONE" --project="$PROJECT_ID" \
+            --tunnel-through-iap --strict-host-key-checking=no --quiet \
+            --command="sudo bash -c $(printf '%q' "$REMOTE")"

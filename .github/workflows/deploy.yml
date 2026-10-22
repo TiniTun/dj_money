@@ -1,0 +1,108 @@
+# Push to main -> tests -> image in Artifact Registry -> rollout on the VM (migrations included).
+# Rollback: open an older successful run and re-run its "deploy" job.
+# GCP side is created once by deploy/gcp/setup-cicd.sh.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One rollout at a time; a newer push waits instead of cancelling a half-finished deploy
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: dj-money-d4ee
+  ZONE: australia-southeast1-b
+  VM: dj-money-vm
+  REGISTRY: australia-southeast1-docker.pkg.dev
+  IMAGE: australia-southeast1-docker.pkg.dev/dj-money-d4ee/dj-money/app
+  WIF_PROVIDER: projects/783994019028/locations/global/workloadIdentityPools/github/providers/dj-money
+  DEPLOY_SA: github-deploy@dj-money-d4ee.iam.gserviceaccount.com
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: dj_money
+          POSTGRES_PASSWORD: dj_money
+          POSTGRES_DB: dj_money
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # settings.py requires these; tests mock every external service, so dummies are enough
+      SECRET_KEY: ci
+      DEBUG: 'False'
+      ALLOWED_HOSTS: localhost
+      DATABASE_URL: postgres://dj_money:dj_money@localhost:5432/dj_money
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      DOWNLOAD_API_TOKEN: ci
+      YANDEX_ENDPOINT: https://storage.example.com
+      YANDEX_BUCKET: ci
+      YANDEX_ACCESS_KEY: ci
+      YANDEX_SECRET_KEY: ci
+      YANDEX_GPT_SECRET_KEY: ci
+      YANDEX_ID_FOLDER: ci
+      OPENAI_API_KEY: ci
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Check for model changes without a migration
+        run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - run: gcloud auth configure-docker "$REGISTRY" --quiet
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Roll out on the VM
+        # The checkout keeps compose, Caddyfile and scripts on the VM in step with the image
+        run: |
+          gcloud compute ssh "$VM" --zone="$ZONE" --project="$PROJECT_ID" \
+            --tunnel-through-iap --strict-host-key-checking=no --quiet \
+            --command="sudo sh -c 'cd /opt/dj_money && git fetch --quiet origin && git checkout --quiet --force $GITHUB_SHA && deploy/gcp/deploy.sh $GITHUB_SHA'"

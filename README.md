@@ -37,6 +37,23 @@
    ```
 5. The application will be available at http://localhost:8000
 
+## Deployment (GCP)
+
+Production is one GCE VM running `docker-compose.gcp.yml`, with Postgres in Cloud SQL.
+
+- **Deploy:** push to `main`. GitHub Actions runs the tests, builds the image into Artifact Registry and rolls it out on the VM, migrations included (`.github/workflows/deploy.yml`).
+- **Rollback:** re-run the `deploy` job of an older successful run.
+- **One-off commands:** Actions → Manage → Run workflow, e.g. `backfill_exchange_rates --start 2021-01-01`.
+- **Config:** the production `.env` lives in Secret Manager and is applied on the next deploy:
+  ```bash
+  gcloud secrets versions access latest --secret=dj-money-env --project=dj-money-d4ee > prod.env
+  # edit prod.env, then
+  gcloud secrets versions add dj-money-env --data-file=prod.env --project=dj-money-d4ee && rm prod.env
+  ```
+- **Shell on the VM:** `gcloud compute ssh dj-money-vm --zone=australia-southeast1-b --tunnel-through-iap`
+
+First-time setup: `deploy/gcp/create-resources.sh` and `provision.sh` create the VM, then `deploy/gcp/setup-cicd.sh` connects it to GitHub Actions.
+
 ## Project Structure
 - `money/` — main Django app (models, views, parsers, tasks)
 - `blog/` — additional apps
