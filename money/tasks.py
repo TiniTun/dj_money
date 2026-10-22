@@ -9,14 +9,14 @@ from django.db import transaction as db_transaction, IntegrityError
 from django.db.models.functions import Length
 from openai import OpenAI
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from .models import Transaction, BankExportFiles, Account, User, Currency, ExpenseCategory, GptLog, PlaceCategoryMapping, BankSource, TransactionCategoryLog, ExchangeRate
 from .parsers.bcc_parser import BccStatementParser
 from .parsers.ff_parser import FFStatementParser
 from .parsers.commbank_parser import CommbankStatementParser
 from .utils.s3_utils import get_s3_client
-from .utils.fixed_api import fetch_exchange_rates_for_date, date_range
-from .utils.unirate_api import latest, timeseries
+from .utils.exchange_rates import sync_exchange_rates
+from .utils.frankfurter_api import is_transient_error
 
 from yandex_cloud_ml_sdk import YCloudML
 
@@ -381,50 +381,31 @@ def upload_exchange_rates_task(self, start_date_str=None, end_date_str=None, ext
     Fetches exchange rates for a given date range in the background.
     """
     try:
-        if start_date_str is None:
-            start_date = date.today()
-        else:
-            start_date = date.fromisoformat(start_date_str)
-        if end_date_str is None:
-            end_date = date.today()
-        else:
-            end_date = date.fromisoformat(end_date_str)
+        start_date = date.fromisoformat(start_date_str) if start_date_str else date.today()
+        end_date = date.fromisoformat(end_date_str) if end_date_str else date.today()
 
-        # If a single day is requested and it's today, use latest(); otherwise, use timeseries()
-        if start_date == end_date and start_date == date.today():
-            latest_payload = latest(for_date=start_date, extra_currency=extra_currency, only_extra=only_extra)
-
-            base_currency = Currency.objects.get(code=latest_payload['base'])
-            record_date = latest_payload['date']
-            for target_code, rate_value in (latest_payload.get('rates') or {}).items():
-                target_currency = Currency.objects.get(code=target_code)
-                ExchangeRate.objects.create(
-                    source_currency=base_currency,
-                    target_currency=target_currency,
-                    exchange_rate=rate_value,
-                    date=record_date,
-                )
-            return f"Successfully fetched exchange rates for {start_date.isoformat()}."
-        else:
-            ts_payload = timeseries(
-                start_date=start_date,
-                end_date=end_date,
-                extra_currency=extra_currency,
-                only_extra=only_extra,
-            )
-
-            base_currency = Currency.objects.get(code=ts_payload['base'])
-            data_map = ts_payload.get('data') or {}
-            for date_str, day_rates in data_map.items():
-                record_date = date.fromisoformat(date_str)
-                for target_code, rate_value in (day_rates or {}).items():
-                    target_currency = Currency.objects.get(code=target_code)
-                    ExchangeRate.objects.create(
-                        source_currency=base_currency,
-                        target_currency=target_currency,
-                        exchange_rate=rate_value,
-                        date=record_date,
-                    )
-            return f"Successfully fetched exchange rates from {start_date.isoformat()} to {end_date.isoformat()}."
+        # By default all currencies known to the app are fetched; only_extra narrows it to one
+        symbols = [extra_currency] if only_extra else None
+        count = sync_exchange_rates(start_date, end_date, symbols=symbols)
+        return f"Saved {count} exchange rates from {start_date.isoformat()} to {end_date.isoformat()}."
     except Exception as e:
-        raise self.retry(exc=e)
+        if is_transient_error(e):
+            raise self.retry(exc=e)
+        raise
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=600)
+def update_exchange_rates_daily(self, days_back=7):
+    """
+    Refreshes the last few days of rates, so a missed run or a late publication is caught up next time.
+    Scheduled in CELERY_BEAT_SCHEDULE.
+    """
+    try:
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days_back)
+        count = sync_exchange_rates(start_date, end_date)
+        return f"Saved {count} exchange rates from {start_date.isoformat()} to {end_date.isoformat()}."
+    except Exception as e:
+        if is_transient_error(e):
+            raise self.retry(exc=e)
+        raise

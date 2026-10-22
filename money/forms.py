@@ -1,5 +1,5 @@
 from django import forms
-from .models import BankExportFiles
+from .models import BankExportFiles, Currency
 
 class BankExportFilesForm(forms.ModelForm):
     class Meta:
@@ -10,9 +10,15 @@ class BankExportFilesForm(forms.ModelForm):
 class DateCurrencyExchangeForm(forms.Form):
     start_date = forms.DateField()
     end_date = forms.DateField()
-    extra_currency = forms.Field(required=False)
+    extra_currency = forms.CharField(required=False)
     only_extra = forms.BooleanField(required=False)
-    
+
+    def clean_extra_currency(self):
+        code = self.cleaned_data.get('extra_currency', '').strip().upper()
+        if code and not Currency.objects.filter(code=code).exists():
+            raise forms.ValidationError(f"Currency {code} is not added to the app.")
+        return code
+
     def clean(self):
         cleaned_data = super().clean()
         start_date = cleaned_data.get('start_date')

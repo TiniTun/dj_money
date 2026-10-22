@@ -1,3 +1,6 @@
+import logging
+from datetime import timedelta
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -5,6 +8,11 @@ from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .validators import validate_file_extension
+
+logger = logging.getLogger(__name__)
+
+# Rates are refreshed daily, so an older one means the daily update has stopped working
+STALE_RATE_AFTER = timedelta(days=7)
 
 
 class ExpenseCategory(models.Model):
@@ -36,8 +44,11 @@ class Currency(models.Model):
 class ExchangeRate(models.Model):
     source_currency = models.ForeignKey(Currency, related_name='source_currency', on_delete=models.CASCADE)
     target_currency = models.ForeignKey(Currency, related_name='target_currency', on_delete=models.CASCADE)
-    exchange_rate = models.DecimalField(max_digits=10, decimal_places=6)
+    exchange_rate = models.DecimalField(max_digits=18, decimal_places=6)
     date = models.DateField()
+
+    class Meta:
+        unique_together = ('source_currency', 'target_currency', 'date')
 
     def __str__(self):
         return f"{self.date}: 1 {self.source_currency.code} = {self.exchange_rate} {self.target_currency.code}"
@@ -157,11 +168,23 @@ class Transaction(models.Model):
                 else:
                     self.amount = float(self.original_amount) / float(self.exchange_rate)
         else:
-            # Find the exchange rate safely
-            rate_obj = ExchangeRate.objects.filter(target_currency = self.currency, date = self.date).first()
+            # Rates are not published every day (weekends, holidays), so take the latest one on or before the date
+            rate_obj = ExchangeRate.objects.filter(
+                source_currency__code = 'USD',
+                target_currency = self.currency,
+                date__lte = self.date,
+            ).order_by('-date').first()
             if rate_obj:
                 self.exchange_rate = rate_obj.exchange_rate
+                # Imports may pass the date as a string or datetime
+                on_date = self._meta.get_field('date').to_python(self.date)
+                if on_date - rate_obj.date > STALE_RATE_AFTER:
+                    logger.warning(
+                        'Exchange rate USD->%s for %s is stale: latest stored rate is from %s',
+                        self.currency.code, on_date, rate_obj.date,
+                    )
             else:
+                logger.warning('No exchange rate USD->%s on or before %s, using 1', self.currency.code, self.date)
                 self.exchange_rate = 1 # @todo change to default value
 
             if self.amount:

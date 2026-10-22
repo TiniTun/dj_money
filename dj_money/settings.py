@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 from pathlib import Path
 import environ
 import os
+from celery.schedules import crontab
 
 
 env = environ.Env(
@@ -148,11 +149,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Redirect to home URL after login (Default redirects to /accounts/profile/)
 LOGIN_REDIRECT_URL = '/'
 
-FIXER_API_URL = env('FIXER_API_URL')
-FIXER_API_KEY = env('FIXER_API_KEY')
-
-UNIRATE_API_URL = 'https://api.unirateapi.com'
-UNIRATE_API_KEY = env('UNIRATE_API_KEY')
+FRANKFURTER_API_URL = 'https://api.frankfurter.dev/v2'
 
 DOWNLOAD_API_TOKEN = env('DOWNLOAD_API_TOKEN')
 YANDEX_ACCESS_KEY = env('YANDEX_ACCESS_KEY')
@@ -173,6 +170,14 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Australia/Brisbane'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60 # Ограничение времени выполнения задачи (30 минут)
+
+# DatabaseScheduler copies these entries into django_celery_beat on start
+CELERY_BEAT_SCHEDULE = {
+    'update-exchange-rates-daily': {
+        'task': 'money.tasks.update_exchange_rates_daily',
+        'schedule': crontab(hour=10, minute=0), # 10:00 Brisbane = 00:00 UTC
+    },
+}
 
 OPENAI_API_KEY = env('OPENAI_API_KEY')
 
