@@ -6,6 +6,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction as db_transaction, IntegrityError
+from django.db.models.functions import Length
 from openai import OpenAI
 
 from datetime import date, datetime
@@ -101,10 +102,11 @@ def _find_category_for_place(place, user):
         return exact_match.category
 
     # 2. Check for 'contains' matches
+    # Longer keywords are more specific, so they win over broad ones like "CAFE"
     contains_rules = PlaceCategoryMapping.objects.filter(
         user=user,
         match_type=PlaceCategoryMapping.MatchType.CONTAINS
-    )
+    ).order_by(Length('place_keyword').desc(), 'id')
     for rule in contains_rules:
         # Case-insensitive check
         if rule.place_keyword.lower() in place.lower():
