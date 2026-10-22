@@ -37,6 +37,11 @@ DEBUG = env('DEBUG')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
+# In production the app sits behind Caddy, which terminates HTTPS
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = env.bool('SECURE_COOKIES', default=False)
+CSRF_COOKIE_SECURE = env.bool('SECURE_COOKIES', default=False)
+
 # Application definition
 
 INSTALLED_APPS = [

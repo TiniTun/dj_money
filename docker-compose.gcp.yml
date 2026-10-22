@@ -1,0 +1,77 @@
+# Production stack for a single GCE VM. Postgres lives in Cloud SQL behind the auth proxy.
+# Usage on the VM: docker compose -f docker-compose.gcp.yml up -d --build
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile.prod
+  image: dj_money:prod
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    - cloudsql
+    - redis
+
+services:
+  web:
+    <<: *app
+    command: sh -c "python manage.py collectstatic --noinput && gunicorn dj_money.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"
+    volumes:
+      - static:/home/app/web/static
+      - media:/home/app/web/media
+      - shared_tmp:/home/app/web/tmp
+
+  celery_worker:
+    <<: *app
+    command: celery -A dj_money worker -l info --concurrency 2
+    volumes:
+      - shared_tmp:/home/app/web/tmp
+
+  celery_beat:
+    <<: *app
+    command: celery -A dj_money beat -l info --scheduler django_celery_beat.schedulers.DatabaseScheduler
+
+  cloudsql:
+    # Authenticates with the VM's service account (roles/cloudsql.client)
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.25.4
+    command: ["--address=0.0.0.0", "--port=5432", "${CLOUDSQL_INSTANCE}"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.4.7-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.11.6-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./deploy/gcp/Caddyfile:/etc/caddy/Caddyfile:ro
+      - static:/srv/static:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+
+  # One-off Postgres client for restores and backups: docker compose run --rm dbtools ...
+  dbtools:
+    image: postgres:17.10-alpine
+    env_file: .env
+    depends_on:
+      - cloudsql
+    profiles: ["tools"]
+
+volumes:
+  static:
+  media:
+  shared_tmp:
+  redis_data:
+  caddy_data:
+  caddy_config:

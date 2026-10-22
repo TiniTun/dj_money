@@ -1,3 +1,9 @@
 .venv
 .git
 .gitignore
+# Secrets and local data must never be baked into an image
+.env
+backups
+media
+tmp
+*.dump
