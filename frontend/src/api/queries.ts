@@ -16,9 +16,12 @@ export function useMe() {
   })
 }
 
+// The currency is '' until /api/me has loaded, so the three queries below
+// that depend on it stay disabled until then.
 export function useSummary(currency: string) {
   return useQuery({
     queryKey: ['summary', currency],
+    enabled: currency !== '',
     queryFn: async () => {
       const { data, response } = await api.GET('/api/dashboard/summary', {
         params: { query: { currency } },
@@ -32,6 +35,7 @@ export function useSummary(currency: string) {
 export function useCategories(currency: string, period: 'week' | 'month') {
   return useQuery({
     queryKey: ['categories', currency, period],
+    enabled: currency !== '',
     queryFn: async () => {
       const { data, response } = await api.GET('/api/dashboard/categories', {
         params: { query: { currency, period } },
@@ -45,6 +49,7 @@ export function useCategories(currency: string, period: 'week' | 'month') {
 export function useRecent(currency: string) {
   return useQuery({
     queryKey: ['recent', currency],
+    enabled: currency !== '',
     queryFn: async () => {
       const { data, response } = await api.GET('/api/dashboard/transactions/recent', {
         params: { query: { currency } },
