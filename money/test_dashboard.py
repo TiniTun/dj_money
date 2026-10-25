@@ -6,8 +6,9 @@ from django.test import TestCase
 from .dashboard.categories import CategoryTree
 from .dashboard.currency import RateBook, available_currencies
 from .dashboard.periods import Period, dashboard_today, month_to_date, previous_month_to_date, week_to_date
+from .dashboard.spending import Total, recent, spending_transactions, total_for, totals_by_category
 from .models import ExchangeRate, ExpenseCategory
-from .testing import create_category, create_currency, create_user
+from .testing import create_account, create_category, create_currency, create_transaction, create_user
 
 
 class CategoryTreeTests(TestCase):
@@ -78,3 +79,72 @@ class RateBookTests(TestCase):
 
     def test_available_currencies_are_usd_plus_quoted(self):
         self.assertEqual(available_currencies(), ['AUD', 'KZT', 'USD'])
+
+
+class SpendingTests(TestCase):
+    def setUp(self):
+        self.user = create_user()
+        self.aud = create_currency('AUD')
+        self.account = create_account(self.user, self.aud)
+        self.savings = create_account(self.user, self.aud, name='Savings')
+        self.october = Period(date(2026, 10, 1), date(2026, 10, 31))
+        self.book = RateBook(['AUD'], until=date(2026, 10, 31))
+
+    def spending(self):
+        return spending_transactions(self.user, CategoryTree(self.user))
+
+    def total(self):
+        return total_for(self.spending(), self.october, 'AUD', self.book)
+
+    def totals_by_category(self):
+        return totals_by_category(self.spending(), self.october, 'AUD', self.book, CategoryTree(self.user))
+
+    def test_only_spending_expenses_are_counted(self):
+        food = create_category(self.user, 'Продукты')
+        transfers = create_category(self.user, 'Переводы между своими', is_spending=False)
+        on = date(2026, 10, 20)
+        create_transaction(self.account, Decimal('-100'), on, category=food)
+        create_transaction(self.account, Decimal('-50'), on, category=create_category(self.user, 'Карта', parent=transfers))
+        create_transaction(self.account, Decimal('500'), on, transaction_type='income')
+        create_transaction(self.account, Decimal('-30'), on, transaction_type='transfer', to_account=self.savings)
+        create_transaction(create_account(create_user('other'), self.aud), Decimal('-999'), on)
+        self.assertEqual(self.total(), Total(amount=Decimal('100'), unconverted=0))
+
+    def test_positive_expense_counts_as_spending(self):
+        create_transaction(self.account, Decimal('30'), date(2026, 10, 20))
+        self.assertEqual(self.total().amount, Decimal('30'))
+
+    def test_unconverted_are_counted_not_summed(self):
+        kzt_account = create_account(self.user, create_currency('KZT'), name='Kaspi')
+        create_transaction(kzt_account, Decimal('-4500'), date(2026, 10, 20))  # нет курса USD→KZT
+        create_transaction(self.account, Decimal('0'), date(2026, 10, 20))
+        self.assertEqual(self.total(), Total(amount=Decimal('0'), unconverted=2))
+
+    def test_period_bounds_are_inclusive(self):
+        for day in (date(2026, 9, 30), date(2026, 10, 1), date(2026, 10, 24), date(2026, 10, 25)):
+            create_transaction(self.account, Decimal('-10'), day)
+        total = total_for(self.spending(), Period(date(2026, 10, 1), date(2026, 10, 24)), 'AUD', self.book)
+        self.assertEqual(total.amount, Decimal('20'))
+
+    def test_categories_roll_up_to_root_and_uncategorized_is_last(self):
+        food = create_category(self.user, 'Еда')
+        cafe = create_category(self.user, 'Кафе', parent=food)
+        transport = create_category(self.user, 'Транспорт')
+        on = date(2026, 10, 20)
+        create_transaction(self.account, Decimal('-200'), on, category=cafe)
+        create_transaction(self.account, Decimal('-50'), on, category=food)
+        create_transaction(self.account, Decimal('-100'), on, category=transport)
+        create_transaction(self.account, Decimal('-300'), on)
+        names = [(c.name, c.amount) for c in self.totals_by_category()]
+        self.assertEqual(names, [('Еда', Decimal('250')), ('Транспорт', Decimal('100')), ('Без категории', Decimal('300'))])
+
+    def test_category_outside_users_tree_is_its_own_root(self):
+        foreign = create_category(create_user('other'), 'Чужая')
+        create_transaction(self.account, Decimal('-70'), date(2026, 10, 20), category=foreign)
+        totals = self.totals_by_category()
+        self.assertEqual([(c.category_id, c.name, c.amount) for c in totals], [(foreign.id, 'Чужая', Decimal('70'))])
+
+    def test_recent_is_today_and_yesterday(self):
+        for day in (22, 23, 24):
+            create_transaction(self.account, Decimal('-10'), date(2026, 10, day))
+        self.assertEqual([t.date for t in recent(self.spending(), date(2026, 10, 24))], [date(2026, 10, 24), date(2026, 10, 23)])
