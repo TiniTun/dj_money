@@ -73,6 +73,13 @@ class DashboardApiTests(TestCase):
         body = self.client.get('/api/dashboard/summary?currency=KZT').json()
         self.assertEqual((body['today'], body['unconverted']), (450, 1))
 
+    def test_summary_unconverted_covers_the_week_that_starts_in_the_previous_month(self):
+        # Friday: the week (Mon 2026-09-28 .. today) begins before the month does.
+        create_transaction(self.account, -10, date(2026, 9, 29), currency=create_currency('EUR'))  # no EUR rate
+        with mock.patch('money.api.dashboard_today', return_value=date(2026, 10, 2)):
+            body = self.client.get('/api/dashboard/summary?currency=KZT').json()
+        self.assertEqual(body['unconverted'], 1)
+
     def test_unknown_currency_is_rejected(self):
         for url in ['/api/dashboard/summary', '/api/dashboard/categories', '/api/dashboard/transactions/recent']:
             response = self.client.get(f'{url}?currency=XXX')

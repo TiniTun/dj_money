@@ -57,15 +57,17 @@ def me(request):
 def summary(request, currency: str = settings.DASHBOARD_DEFAULT_CURRENCY):
     currency = checked_currency(currency)
     today, tree, book, transactions = user_context(request)
-    month = total_for(transactions, month_to_date(today), currency, book)
+    week_period, month_period = week_to_date(today), month_to_date(today)
+    # The week can start in the previous month, so the unconverted count covers both periods.
+    uncounted = total_for(transactions, Period(min(week_period.start, month_period.start), today), currency, book)
     return {
         'currency': currency,
         'as_of': today,
         'today': money(total_for(transactions, Period(today, today), currency, book).amount),
-        'week': money(total_for(transactions, week_to_date(today), currency, book).amount),
-        'month': money(month.amount),
+        'week': money(total_for(transactions, week_period, currency, book).amount),
+        'month': money(total_for(transactions, month_period, currency, book).amount),
         'previous_month_to_date': money(total_for(transactions, previous_month_to_date(today), currency, book).amount),
-        'unconverted': month.unconverted,
+        'unconverted': uncounted.unconverted,
     }
 
 
