@@ -45,8 +45,9 @@ export function StatusChips() {
 
   return (
     <div className="flex flex-wrap gap-2">
-      {status.accounts.map((account) => (
-        <Chip key={account.name} level={account.level}>
+      {status.accounts.map((account, index) => (
+        // The API has no account id and names are not unique.
+        <Chip key={`${account.name}-${index}`} level={account.level}>
           {`${account.name} · ${account.days} дн.`}
         </Chip>
       ))}
@@ -56,10 +57,12 @@ export function StatusChips() {
       {status.uncategorized.count > 0 && (
         <Chip level={status.uncategorized.level}>{`Без категории · ${status.uncategorized.count}`}</Chip>
       )}
-      {status.failed_imports.length > 0 && (
-        <Chip level="bad">{`Ошибка выписки · ${status.failed_imports.length}`}</Chip>
-      )}
-      {status.stuck_pending > 0 && <Chip level="warn">{`Зависшие выписки · ${status.stuck_pending}`}</Chip>}
+      {status.failed_imports.map((failed) => (
+        <Chip key={failed.source} level="bad">
+          {`${failed.source}: ошибка выписки`}
+        </Chip>
+      ))}
+      {status.stuck_pending > 0 && <Chip level="bad">{`Зависшие выписки · ${status.stuck_pending}`}</Chip>}
     </div>
   )
 }

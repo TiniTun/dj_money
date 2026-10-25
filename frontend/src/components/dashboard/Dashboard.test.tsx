@@ -27,11 +27,21 @@ type Fixtures = {
   summaryUnconverted?: number
   categories?: { id: number | null; name: string; amount: number }[]
   summaryStatus?: number
+  accounts?: { name: string; last_date: string; days: number; level: 'ok' | 'warn' | 'bad' }[]
+  failedImports?: { source: string; uploaded_at: string }[]
+  stuckPending?: number
 }
 
 // Replaces fetch with fixtures for all five endpoints and returns the mock,
 // so that tests can look at the URLs that were requested.
-function mockApi({ summaryUnconverted = 0, categories, summaryStatus = 200 }: Fixtures = {}) {
+function mockApi({
+  summaryUnconverted = 0,
+  categories,
+  summaryStatus = 200,
+  accounts,
+  failedImports = [],
+  stuckPending = 0,
+}: Fixtures = {}) {
   const fetchMock = vi.fn(async (request: Request) => {
     const url = new URL(request.url)
     const currency = url.searchParams.get('currency')
@@ -90,11 +100,11 @@ function mockApi({ summaryUnconverted = 0, categories, summaryStatus = 200 }: Fi
         })
       case '/api/dashboard/status':
         return json({
-          accounts: [{ name: 'CommBank AUD', last_date: '2026-10-22', days: 2, level: 'ok' }],
+          accounts: accounts ?? [{ name: 'CommBank AUD', last_date: '2026-10-22', days: 2, level: 'ok' }],
           rates: { last_date: '2026-10-24', level: 'ok' },
           uncategorized: { count: 14, level: 'warn' },
-          failed_imports: [],
-          stuck_pending: 0,
+          failed_imports: failedImports,
+          stuck_pending: stuckPending,
         })
       default:
         return json({}, 404)
@@ -203,4 +213,39 @@ it('shows an error in the failed block only', async () => {
   // Other blocks still work.
   expect(await screen.findByText('Woolworths')).toBeInTheDocument()
   expect(within(screen.getByRole('alert')).getByText('Не удалось загрузить суммы')).toBeInTheDocument()
+})
+
+it('shows a red chip per bank with a failed import', async () => {
+  mockApi({
+    failedImports: [
+      { source: 'CommBank', uploaded_at: '2026-10-24T01:00:00Z' },
+      { source: 'BCC', uploaded_at: '2026-10-23T01:00:00Z' },
+    ],
+  })
+  render(<Dashboard />, { wrapper: QueryWrapper })
+
+  expect(await screen.findByText('CommBank: ошибка выписки')).toBeInTheDocument()
+  expect(screen.getByText('BCC: ошибка выписки')).toBeInTheDocument()
+})
+
+it('shows a chip for stuck imports', async () => {
+  mockApi({ stuckPending: 2 })
+  render(<Dashboard />, { wrapper: QueryWrapper })
+
+  expect(await screen.findByText('Зависшие выписки · 2')).toBeInTheDocument()
+})
+
+it('renders accounts with the same name without key warnings', async () => {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  mockApi({
+    accounts: [
+      { name: 'Savings', last_date: '2026-10-22', days: 2, level: 'ok' },
+      { name: 'Savings', last_date: '2026-10-10', days: 14, level: 'bad' },
+    ],
+  })
+  render(<Dashboard />, { wrapper: QueryWrapper })
+
+  expect(await screen.findAllByText(/Savings/)).toHaveLength(2)
+  expect(consoleError).not.toHaveBeenCalled()
+  consoleError.mockRestore()
 })
