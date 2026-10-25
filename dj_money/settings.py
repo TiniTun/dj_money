@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'money.apps.MoneyConfig',
     'django_celery_results',
     'django_celery_beat',
+    'ninja',
     'blog.apps.BlogConfig',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -126,6 +127,9 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
+
+DASHBOARD_TIMEZONE = 'Australia/Brisbane'
+DASHBOARD_DEFAULT_CURRENCY = 'AUD'
 
 USE_I18N = True
 

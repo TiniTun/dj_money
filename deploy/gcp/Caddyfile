@@ -6,7 +6,28 @@
 		file_server
 	}
 
-	handle {
+	@django path /api /api/* /admin /admin/* /accounts /accounts/* /money /money/* /blog /blog/*
+	handle @django {
 		reverse_proxy web:8000
+	}
+
+	handle {
+		root * /srv/frontend
+
+		# Hashed build files never change, and a missing one is a real 404:
+		# no index.html fallback, or a stale page would get HTML instead of JS.
+		# Only existing files get the long cache header, so a 404 is never cached.
+		handle /assets/* {
+			@exists file
+			header @exists Cache-Control "public, max-age=31536000, immutable"
+			file_server
+		}
+
+		# index.html and the SPA routes always revalidate, so a deploy shows up at once.
+		handle {
+			header Cache-Control "no-cache"
+			try_files {path} /index.html
+			file_server
+		}
 	}
 }

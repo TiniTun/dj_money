@@ -1,0 +1,557 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "dj_money",
+    "version": "1.0.0",
+    "description": ""
+  },
+  "paths": {
+    "/api/me": {
+      "get": {
+        "operationId": "money_api_me",
+        "summary": "Me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/dashboard/summary": {
+      "get": {
+        "operationId": "money_api_summary",
+        "summary": "Summary",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "default": "AUD",
+              "title": "Currency",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/dashboard/categories": {
+      "get": {
+        "operationId": "money_api_categories",
+        "summary": "Categories",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "default": "AUD",
+              "title": "Currency",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "default": "month",
+              "enum": [
+                "week",
+                "month"
+              ],
+              "title": "Period",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoriesOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/dashboard/transactions/recent": {
+      "get": {
+        "operationId": "money_api_recent_transactions",
+        "summary": "Recent Transactions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "default": "AUD",
+              "title": "Currency",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    },
+    "/api/dashboard/status": {
+      "get": {
+        "operationId": "money_api_status",
+        "summary": "Status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MeOut": {
+        "properties": {
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "default_currency": {
+            "title": "Default Currency",
+            "type": "string"
+          },
+          "currencies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Currencies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "username",
+          "default_currency",
+          "currencies"
+        ],
+        "title": "MeOut",
+        "type": "object"
+      },
+      "SummaryOut": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "today": {
+            "title": "Today",
+            "type": "number"
+          },
+          "week": {
+            "title": "Week",
+            "type": "number"
+          },
+          "month": {
+            "title": "Month",
+            "type": "number"
+          },
+          "previous_month_to_date": {
+            "title": "Previous Month To Date",
+            "type": "number"
+          },
+          "unconverted": {
+            "title": "Unconverted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "as_of",
+          "today",
+          "week",
+          "month",
+          "previous_month_to_date",
+          "unconverted"
+        ],
+        "title": "SummaryOut",
+        "type": "object"
+      },
+      "CategoriesOut": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "period",
+          "start",
+          "end",
+          "items"
+        ],
+        "title": "CategoriesOut",
+        "type": "object"
+      },
+      "CategoryOut": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "amount"
+        ],
+        "title": "CategoryOut",
+        "type": "object"
+      },
+      "RecentOut": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecentTransactionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "items"
+        ],
+        "title": "RecentOut",
+        "type": "object"
+      },
+      "RecentTransactionOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "original_amount": {
+            "title": "Original Amount",
+            "type": "number"
+          },
+          "original_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Currency"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "title",
+          "category",
+          "amount",
+          "original_amount",
+          "original_currency"
+        ],
+        "title": "RecentTransactionOut",
+        "type": "object"
+      },
+      "AccountStatusOut": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "last_date": {
+            "format": "date",
+            "title": "Last Date",
+            "type": "string"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "level": {
+            "enum": [
+              "ok",
+              "warn",
+              "bad"
+            ],
+            "title": "Level",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "last_date",
+          "days",
+          "level"
+        ],
+        "title": "AccountStatusOut",
+        "type": "object"
+      },
+      "FailedImportOut": {
+        "properties": {
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "uploaded_at"
+        ],
+        "title": "FailedImportOut",
+        "type": "object"
+      },
+      "RatesOut": {
+        "properties": {
+          "last_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Date"
+          },
+          "level": {
+            "enum": [
+              "ok",
+              "warn",
+              "bad"
+            ],
+            "title": "Level",
+            "type": "string"
+          }
+        },
+        "required": [
+          "last_date",
+          "level"
+        ],
+        "title": "RatesOut",
+        "type": "object"
+      },
+      "StatusOut": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AccountStatusOut"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "rates": {
+            "$ref": "#/components/schemas/RatesOut"
+          },
+          "uncategorized": {
+            "$ref": "#/components/schemas/UncategorizedOut"
+          },
+          "failed_imports": {
+            "items": {
+              "$ref": "#/components/schemas/FailedImportOut"
+            },
+            "title": "Failed Imports",
+            "type": "array"
+          },
+          "stuck_pending": {
+            "title": "Stuck Pending",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accounts",
+          "rates",
+          "uncategorized",
+          "failed_imports",
+          "stuck_pending"
+        ],
+        "title": "StatusOut",
+        "type": "object"
+      },
+      "UncategorizedOut": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "level": {
+            "enum": [
+              "ok",
+              "warn",
+              "bad"
+            ],
+            "title": "Level",
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "level"
+        ],
+        "title": "UncategorizedOut",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "SessionAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sessionid"
+      }
+    }
+  },
+  "servers": []
+}

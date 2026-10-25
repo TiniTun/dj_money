@@ -20,7 +20,7 @@ class ExpenseCategory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     parent_category = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE)
     for_categorized = models.BooleanField(default=True, help_text="Use this category for categorization of transactions")
-
+    is_spending = models.BooleanField(default=True, help_text='Учитывать в тратах на дашборде')
 
     def __str__(self):
         return self.name
