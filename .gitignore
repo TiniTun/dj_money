@@ -164,3 +164,6 @@ media/*
 .DS_Store
 # Local copies of production backups (secrets, financial data)
 backups/
+
+# Brainstorming mockups and subagent-driven development workspace
+.superpowers/
