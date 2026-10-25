@@ -10,7 +10,13 @@ SPA на React + TypeScript + Vite. Стили: Tailwind CSS и shadcn/ui. Да�
    docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
    ```
 
-2. В другом терминале:
+2. Применить миграции (без колонки `is_spending` API дашборда отвечает 500):
+
+   ```bash
+   docker exec dj_money-web-1 python manage.py migrate
+   ```
+
+3. В другом терминале:
 
    ```bash
    cd frontend
@@ -18,7 +24,11 @@ SPA на React + TypeScript + Vite. Стили: Tailwind CSS и shadcn/ui. Да�
    npm run dev
    ```
 
-3. Открыть `http://localhost:5173`. Vite проксирует `/api`, `/accounts`, `/admin` и `/static` на Django. Прокси работает без `changeOrigin`, чтобы заголовок Host остался `localhost:5173`: иначе проверка CSRF на форме входа не пройдёт. Если вы не вошли, любой запрос к API вернёт 401, и приложение перенаправит на страницу входа Django.
+4. Открыть `http://localhost:5173`. Vite проксирует `/api`, `/accounts`, `/admin` и `/static` на Django. Прокси работает без `changeOrigin`, чтобы заголовок Host остался `localhost:5173`: иначе проверка CSRF на форме входа не пройдёт. Если вы не вошли, любой запрос к API вернёт 401, и приложение перенаправит на страницу входа Django.
+
+## После первого деплоя
+
+Раньше `/` навсегда перенаправлял на `/money/`, и браузеры запомнили этот редирект. Если после деплоя `/` всё ещё прыгает на `/money/`, на каждом устройстве очистите данные сайта для этого домена или один раз откройте сайт в приватном окне.
 
 ## Скрипты
 
