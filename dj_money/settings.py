@@ -127,6 +127,9 @@ LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
 
+DASHBOARD_TIMEZONE = 'Australia/Brisbane'
+DASHBOARD_DEFAULT_CURRENCY = 'AUD'
+
 USE_I18N = True
 
 USE_TZ = True
