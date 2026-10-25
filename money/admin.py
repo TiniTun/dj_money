@@ -127,8 +127,8 @@ class ParentCategoryFilter(admin.SimpleListFilter):
             return queryset.filter(parent_category__isnull=False)
 
 class ExpenseCategoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'parent_category', 'user',)
-    list_filter = (ParentCategoryFilter, 'user',)
+    list_display = ('name', 'parent_category', 'is_spending', 'user',)
+    list_filter = (ParentCategoryFilter, 'is_spending', 'user',)
 
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(IncomeCategory, IncomeCategoryAdmin)
