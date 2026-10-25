@@ -29,6 +29,20 @@ COPY requirements.txt .
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /usr/src/app/wheels -r requirements.txt
 
 
+############
+# FRONTEND #
+############
+
+# Node is needed only here, the final image carries just the built files
+FROM node:22-alpine AS frontend
+
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run check && npm run build
+
+
 #########
 # FINAL #
 #########
@@ -63,6 +77,9 @@ RUN pip install --no-cache /wheels/*
 
 # copy project
 COPY . $APP_HOME
+
+# built SPA; web copies it into the shared frontend volume on start
+COPY --from=frontend /frontend/dist $APP_HOME/frontend_dist
 
 # copy entrypoint script
 COPY ./entrypoint.prod.sh /entrypoint.prod.sh

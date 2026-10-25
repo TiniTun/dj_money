@@ -172,3 +172,9 @@ class DashboardApiTests(TestCase):
         call_command('export_openapi_schema', api='money.api.api', indent=2, stdout=out)
         committed = json.loads((settings.BASE_DIR / 'frontend' / 'openapi.json').read_text())
         self.assertEqual(json.loads(out.getvalue()), committed, 'Run export_openapi_schema and npm run gen:api')
+
+
+class FrontendRoutingTests(TestCase):
+    def test_root_is_served_by_frontend_not_django(self):
+        self.assertEqual(self.client.get('/').status_code, 404)
+        self.assertEqual(self.client.get('/money/').status_code, 200)

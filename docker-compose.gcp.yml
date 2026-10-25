@@ -16,10 +16,11 @@ x-app: &app
 services:
   web:
     <<: *app
-    command: sh -c "python manage.py collectstatic --noinput && gunicorn dj_money.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"
+    command: sh -c "rm -rf frontend_public/* && cp -r frontend_dist/. frontend_public/ && python manage.py collectstatic --noinput && gunicorn dj_money.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"
     volumes:
       - static:/home/app/web/static
       - media:/home/app/web/media
+      - frontend:/home/app/web/frontend_public
       - shared_tmp:/home/app/web/tmp
 
   celery_worker:
@@ -55,6 +56,7 @@ services:
     volumes:
       - ./deploy/gcp/Caddyfile:/etc/caddy/Caddyfile:ro
       - static:/srv/static:ro
+      - frontend:/srv/frontend:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -71,6 +73,7 @@ services:
 
 volumes:
   static:
+  frontend:
   media:
   shared_tmp:
   redis_data:
