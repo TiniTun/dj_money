@@ -8,7 +8,7 @@ from ninja.errors import HttpError
 from ninja.security import django_auth
 
 from money.dashboard.categories import CategoryTree
-from money.dashboard.currency import RateBook, available_currencies
+from money.dashboard.currency import BASE_CODE, RateBook, available_currencies
 from money.dashboard.periods import (
     Period, dashboard_today, month_to_date, previous_month_to_date, week_to_date,
 )
@@ -44,10 +44,12 @@ def user_context(request):
 
 @api.get('/me', response=MeOut)
 def me(request):
+    currencies = available_currencies()
+    default = settings.DASHBOARD_DEFAULT_CURRENCY
     return {
         'username': request.user.get_username(),
-        'default_currency': settings.DASHBOARD_DEFAULT_CURRENCY,
-        'currencies': available_currencies(),
+        'default_currency': default if default in currencies else BASE_CODE,
+        'currencies': currencies,
     }
 
 
@@ -97,7 +99,7 @@ def recent_transactions(request, currency: str = settings.DASHBOARD_DEFAULT_CURR
             category=tx.category.name if tx.category else None,
             amount=None if converted is None else money(converted),
             original_amount=money(abs(tx.amount)),
-            original_currency=tx.currency.code,
+            original_currency=tx.currency.code if tx.currency else None,
         ))
     return {'currency': currency, 'items': items}
 

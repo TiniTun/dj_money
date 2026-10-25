@@ -7,7 +7,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django.test import TestCase
 
-from .models import BankExportFiles, BankSource, ExchangeRate
+from .models import BankExportFiles, BankSource, ExchangeRate, Transaction
 from .testing import create_account, create_category, create_currency, create_transaction, create_user
 
 TODAY = date(2026, 10, 21)  # Wednesday
@@ -37,6 +37,12 @@ class DashboardApiTests(TestCase):
             self.client.get('/api/me').json(),
             {'username': 'u', 'default_currency': 'AUD', 'currencies': ['AUD', 'KZT', 'USD']},
         )
+
+    def test_me_falls_back_to_usd_when_default_currency_has_no_rates(self):
+        ExchangeRate.objects.filter(target_currency=self.aud).delete()
+        body = self.client.get('/api/me').json()
+        self.assertEqual(body['default_currency'], 'USD')
+        self.assertIn('USD', body['currencies'])
 
     def test_summary_for_user_without_transactions(self):
         body = self.client.get('/api/dashboard/summary').json()
@@ -120,6 +126,14 @@ class DashboardApiTests(TestCase):
         item = self.client.get('/api/dashboard/transactions/recent').json()['items'][0]
         self.assertEqual((item['title'], item['amount'], item['original_amount'], item['original_currency']),
                          ('Подарок', None, 10.0, 'EUR'))
+
+    def test_recent_transaction_without_currency(self):
+        tx = create_transaction(self.account, -450, TODAY, place='Наличные')
+        Transaction.objects.filter(pk=tx.pk).update(currency=None)
+        response = self.client.get('/api/dashboard/transactions/recent')
+        self.assertEqual(response.status_code, 200)
+        item = response.json()['items'][0]
+        self.assertEqual((item['title'], item['amount'], item['original_currency']), ('Наличные', None, None))
 
     def test_status(self):
         create_transaction(self.account, -450, TODAY - timedelta(days=5))

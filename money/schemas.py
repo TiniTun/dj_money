@@ -42,7 +42,7 @@ class RecentTransactionOut(Schema):
     category: str | None
     amount: float | None
     original_amount: float
-    original_currency: str
+    original_currency: str | None
 
 
 class RecentOut(Schema):

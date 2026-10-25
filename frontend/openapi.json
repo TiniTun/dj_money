@@ -377,8 +377,15 @@
             "type": "number"
           },
           "original_currency": {
-            "title": "Original Currency",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Currency"
           }
         },
         "required": [
