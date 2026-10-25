@@ -6,7 +6,7 @@
 		file_server
 	}
 
-	@django path /api/* /admin/* /accounts/* /money/*
+	@django path /api /api/* /admin /admin/* /accounts /accounts/* /money /money/* /blog /blog/*
 	handle @django {
 		reverse_proxy web:8000
 	}
