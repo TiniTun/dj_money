@@ -167,3 +167,7 @@ backups/
 
 # Brainstorming mockups and subagent-driven development workspace
 .superpowers/
+
+# React frontend
+frontend/node_modules/
+!frontend/src/lib/
