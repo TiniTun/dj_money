@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from django.test import TestCase
@@ -7,7 +7,11 @@ from .dashboard.categories import CategoryTree
 from .dashboard.currency import RateBook, available_currencies
 from .dashboard.periods import Period, dashboard_today, month_to_date, previous_month_to_date, week_to_date
 from .dashboard.spending import Total, recent, spending_transactions, total_for, totals_by_category
-from .models import ExchangeRate, ExpenseCategory
+from .dashboard.status import (
+    RatesStatus, account_freshness, failed_imports, freshness_level, rates_status, stuck_pending_count,
+    uncategorized_count,
+)
+from .models import BankExportFiles, BankSource, ExchangeRate, ExpenseCategory
 from .testing import create_account, create_category, create_currency, create_transaction, create_user
 
 
@@ -148,3 +152,97 @@ class SpendingTests(TestCase):
         for day in (22, 23, 24):
             create_transaction(self.account, Decimal('-10'), date(2026, 10, day))
         self.assertEqual([t.date for t in recent(self.spending(), date(2026, 10, 24))], [date(2026, 10, 24), date(2026, 10, 23)])
+
+
+class StatusTests(TestCase):
+    def setUp(self):
+        self.user = create_user()
+        self.today = date(2026, 10, 24)
+        self.now = datetime(2026, 10, 24, 12, 0, tzinfo=timezone.utc)
+        self.aud = create_currency('AUD')
+        self.usd = create_currency('USD')
+        self.file_number = 0
+
+    def create_source(self, name, code):
+        # some sources are already seeded by a data migration
+        return BankSource.objects.update_or_create(code=code, defaults={'name': name})[0]
+
+    def create_import(self, source, status, ago):
+        self.file_number += 1
+        item = BankExportFiles.objects.create(
+            user=self.user, source=source, status=status, s3_file_key=f'file-{self.file_number}',
+        )
+        BankExportFiles.objects.filter(pk=item.pk).update(uploaded_at=self.now - ago)
+        return item
+
+    def test_freshness_thresholds(self):
+        self.assertEqual([freshness_level(d) for d in (0, 3, 4, 10, 11)], ['ok', 'ok', 'warn', 'warn', 'bad'])
+
+    def test_inactive_accounts_are_hidden_and_manual_ones_shown(self):
+        anz = create_account(self.user, self.aud, name='ANZ AUD')
+        halyk = create_account(self.user, create_currency('KZT'), name='Halyk KZT')
+        create_transaction(anz, 10, self.today - timedelta(days=5))
+        create_transaction(halyk, 10, self.today - timedelta(days=200))
+        self.assertEqual(
+            [(a.name, a.days, a.level) for a in account_freshness(self.user, self.today)],
+            [('ANZ AUD', 5, 'warn')],
+        )
+
+    def test_freshness_uses_last_transaction_of_any_type_and_sorts_by_name(self):
+        card = create_account(self.user, self.aud, name='Card')
+        cash = create_account(self.user, self.aud, name='Cash')
+        create_transaction(card, 10, self.today - timedelta(days=20))
+        create_transaction(card, 10, self.today - timedelta(days=1), transaction_type='income')
+        create_transaction(cash, 10, self.today - timedelta(days=12), transaction_type='transfer', to_account=card)
+        other = create_account(create_user('other'), self.aud, name='Another')
+        create_transaction(other, 10, self.today)
+        self.assertEqual(
+            [(a.name, a.last_date, a.days, a.level) for a in account_freshness(self.user, self.today)],
+            [('Card', self.today - timedelta(days=1), 1, 'ok'), ('Cash', self.today - timedelta(days=12), 12, 'bad')],
+        )
+
+    def test_rates_older_than_a_week_are_bad(self):
+        self.assertEqual(rates_status(self.today), RatesStatus(None, 'bad'))
+        rate = ExchangeRate.objects.create(
+            source_currency=self.usd, target_currency=self.aud, exchange_rate=Decimal('1.5'),
+            date=self.today - timedelta(days=7),
+        )
+        self.assertEqual(rates_status(self.today), RatesStatus(rate.date, 'ok'))
+        ExchangeRate.objects.filter(pk=rate.pk).update(date=self.today - timedelta(days=8))
+        self.assertEqual(rates_status(self.today), RatesStatus(self.today - timedelta(days=8), 'bad'))
+
+    def test_uncategorized_count_is_limited_to_month_and_spending(self):
+        account = create_account(self.user, self.aud)
+        food = create_category(self.user, 'Еда')
+        month = Period(date(2026, 10, 1), self.today)
+        create_transaction(account, 10, date(2026, 10, 3))
+        create_transaction(account, 10, self.today)
+        create_transaction(account, 10, date(2026, 9, 30))
+        create_transaction(account, 10, date(2026, 10, 4), category=food)
+        create_transaction(account, 10, date(2026, 10, 5), transaction_type='income')
+        self.assertEqual(uncategorized_count(spending_transactions(self.user, CategoryTree(self.user)), month), 2)
+
+    def test_only_latest_failed_import_per_source_is_reported(self):
+        bcc = self.create_source('BCC', 'bcc')
+        commbank = self.create_source('CommBank', 'commbank')
+        self.create_import(bcc, BankExportFiles.Status.FAILED, timedelta(days=3))
+        self.create_import(bcc, BankExportFiles.Status.COMPLETED, timedelta(days=2))
+        self.create_import(commbank, BankExportFiles.Status.COMPLETED, timedelta(days=3))
+        self.create_import(commbank, BankExportFiles.Status.FAILED, timedelta(days=2))
+        result = failed_imports(self.user)
+        self.assertEqual([f.source for f in result], ['CommBank'])
+        self.assertEqual(result[0].uploaded_at, self.now - timedelta(days=2))
+
+    def test_failed_imports_ignore_other_users(self):
+        source = self.create_source('BCC', 'bcc')
+        BankExportFiles.objects.create(
+            user=create_user('other'), source=source, status=BankExportFiles.Status.FAILED, s3_file_key='x',
+        )
+        self.assertEqual(failed_imports(self.user), [])
+
+    def test_pending_older_than_an_hour_is_stuck(self):
+        source = self.create_source('BCC', 'bcc')
+        self.create_import(source, BankExportFiles.Status.PENDING, timedelta(hours=2))
+        self.create_import(source, BankExportFiles.Status.PENDING, timedelta(minutes=10))
+        self.create_import(source, BankExportFiles.Status.COMPLETED, timedelta(hours=5))
+        self.assertEqual(stuck_pending_count(self.user, self.now), 1)
