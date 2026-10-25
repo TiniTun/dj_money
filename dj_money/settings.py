@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'money.apps.MoneyConfig',
     'django_celery_results',
     'django_celery_beat',
+    'ninja',
     'blog.apps.BlogConfig',
     'django.contrib.admin',
     'django.contrib.auth',
