@@ -1,14 +1,17 @@
 from datetime import date
 from decimal import Decimal
+from io import StringIO
 from unittest import mock
 
 import requests
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import TestCase
 
 from .forms import DateCurrencyExchangeForm
-from .models import Account, AccountType, Currency, ExchangeRate, Transaction
+from .models import Account, AccountType, Currency, ExchangeRate, PlaceCategoryMapping, Transaction
 from .tasks import update_exchange_rates_daily, upload_exchange_rates_task
+from .testing import create_account, create_category, create_currency, create_transaction, create_user
 from .utils import frankfurter_api
 from .utils.exchange_rates import sync_exchange_rates
 
@@ -188,3 +191,81 @@ class DateCurrencyExchangeFormTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('extra_currency', form.errors)
+
+
+class ApplyCategoryRulesCommandTests(TestCase):
+    def setUp(self):
+        self.user = create_user()
+        self.account = create_account(self.user, create_currency('AUD'))
+        self.transfers = create_category(self.user, 'Переводы между своими', is_spending=False)
+        self.shops = create_category(self.user, 'Supermarkets')
+        PlaceCategoryMapping.objects.create(user=self.user, place_keyword='Transfer to xx', category=self.transfers)
+        PlaceCategoryMapping.objects.create(user=self.user, place_keyword='Woolworths', category=self.shops)
+
+    def expense(self, place, category=None, transaction_type='expense'):
+        # place is not part of the transaction's unique key, so each one needs its own amount
+        amount = -10 - Transaction.objects.count()
+        return create_transaction(self.account, amount, date(2026, 10, 20), place=place, category=category,
+                                  transaction_type=transaction_type,
+                                  to_account=self.account if transaction_type == 'transfer' else None)
+
+    def run_command(self, *args):
+        out = StringIO()
+        call_command('apply_category_rules', *args, stdout=out)
+        return out.getvalue()
+
+    def category_of(self, transaction):
+        transaction.refresh_from_db()
+        return transaction.category
+
+    def test_uncategorized_expense_gets_rule_category(self):
+        tx = self.expense('Transfer to xx1234 CommBank app')
+
+        self.run_command()
+
+        self.assertEqual(self.category_of(tx), self.transfers)
+
+    def test_dry_run_reports_change_without_saving(self):
+        tx = self.expense('Transfer to xx1234 CommBank app')
+
+        out = self.run_command('--dry-run')
+
+        self.assertIsNone(self.category_of(tx))
+        self.assertIn('Transfer to xx1234 CommBank app', out)
+        self.assertIn('Переводы между своими', out)
+
+    def test_existing_category_is_kept_without_overwrite(self):
+        tx = self.expense('Woolworths Yeronga', category=self.transfers)
+
+        out = self.run_command()
+        self.assertEqual(self.category_of(tx), self.transfers)
+        self.assertIn('1 expenses already have another category', out)
+
+        self.run_command('--overwrite')
+        self.assertEqual(self.category_of(tx), self.shops)
+
+    def test_category_option_applies_only_that_categorys_rules(self):
+        transfer = self.expense('Transfer to xx1234 CommBank app')
+        shop = self.expense('Woolworths Yeronga')
+
+        self.run_command('--category', 'переводы между своими')
+
+        self.assertEqual(self.category_of(transfer), self.transfers)
+        self.assertIsNone(self.category_of(shop))
+
+    def test_unknown_category_is_an_error(self):
+        with self.assertRaisesMessage(Exception, 'Nope'):
+            self.run_command('--category', 'Nope')
+
+    def test_income_transfers_and_other_users_rules_are_ignored(self):
+        income = self.expense('Transfer to xx1234 CommBank app', transaction_type='income')
+        transfer = self.expense('Transfer to xx1234 CommBank app', transaction_type='transfer')
+        other = create_user('other')
+        other_tx = create_transaction(create_account(other, self.account.currency), -10, date(2026, 10, 20),
+                                      place='Transfer to xx9999 CommBank app')
+
+        self.run_command()
+
+        self.assertIsNone(self.category_of(income))
+        self.assertIsNone(self.category_of(transfer))
+        self.assertIsNone(self.category_of(other_tx))
